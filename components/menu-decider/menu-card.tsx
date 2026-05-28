@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { MenuRecommendation } from "@/types/menu-decider";
+import { MenuImage } from "./menu-image";
 
 type Props = {
   recommendation: MenuRecommendation;
@@ -36,8 +37,15 @@ export function MenuCard({
             </Badge>
           )}
         </div>
-        <h2 className="mb-3 text-4xl font-bold">{recommendation.menu}</h2>
-        <p className="text-sm leading-relaxed">{recommendation.reason}</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="w-32 shrink-0 sm:w-40">
+            <MenuImage menu={recommendation.menu} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="mb-3 text-4xl font-bold">{recommendation.menu}</h2>
+            <p className="text-sm leading-relaxed">{recommendation.reason}</p>
+          </div>
+        </div>
 
         <div className="mt-4 flex items-center justify-between border-t pt-4">
           <Button
