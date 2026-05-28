@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Minus, Plus } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import type { Coords, Restaurant } from "@/types/menu-decider";
 
 declare global {
@@ -10,7 +12,11 @@ declare global {
 }
 
 type KakaoLatLng = { __brand: "LatLng" };
-type KakaoMap = { __brand: "Map" };
+type KakaoMap = {
+  __brand: "Map";
+  getLevel: () => number;
+  setLevel: (level: number) => void;
+};
 
 type KakaoNamespace = {
   maps: {
@@ -34,6 +40,9 @@ type KakaoNamespace = {
 };
 
 const SCRIPT_ID = "kakao-maps-sdk";
+// Kakao Maps zoom levels: 1 (most zoomed in) ~ 14 (most zoomed out).
+const MIN_LEVEL = 1;
+const MAX_LEVEL = 14;
 
 function loadKakaoSdk(appkey: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -74,12 +83,17 @@ type Props = {
 
 export function RestaurantMap({ restaurants, center }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<KakaoMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     const appkey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
     if (!appkey || !containerRef.current) return;
 
     let cancelled = false;
+    setMapReady(false);
+    mapRef.current = null;
+
     loadKakaoSdk(appkey)
       .then(() => {
         if (cancelled || !containerRef.current || !window.kakao) return;
@@ -100,6 +114,8 @@ export function RestaurantMap({ restaurants, center }: Props) {
             });
             bounds.extend(latLng);
           });
+          mapRef.current = map;
+          setMapReady(true);
         });
       })
       .catch(() => {
@@ -111,13 +127,51 @@ export function RestaurantMap({ restaurants, center }: Props) {
     };
   }, [restaurants, center]);
 
+  const zoomIn = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setLevel(Math.max(MIN_LEVEL, map.getLevel() - 1));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setLevel(Math.min(MAX_LEVEL, map.getLevel() + 1));
+  }, []);
+
   return (
-    <div
-      ref={containerRef}
-      data-testid="restaurant-map"
-      role="img"
-      aria-label="식당 위치 지도"
-      className="aspect-square w-full rounded-xl border bg-muted"
-    />
+    <div className="relative aspect-square w-full">
+      <div
+        ref={containerRef}
+        data-testid="restaurant-map"
+        role="img"
+        aria-label="식당 위치 지도"
+        className="size-full rounded-xl border bg-muted"
+      />
+      {mapReady && (
+        <div className="absolute right-2 top-2 z-10 flex flex-col gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="지도 확대"
+            onClick={zoomIn}
+            className="shadow-sm"
+          >
+            <Plus />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="지도 축소"
+            onClick={zoomOut}
+            className="shadow-sm"
+          >
+            <Minus />
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
