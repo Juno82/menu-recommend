@@ -321,10 +321,10 @@
   - `components/menu-decider/restaurant-empty.tsx` ("근처 식당을 찾지 못했습니다" + `https://map.kakao.com/?q={메뉴명}` 외부 링크)
   - `app/page.tsx` 업데이트 (search-restaurants가 0개 또는 실패 → restaurant-empty 표시, 지도 숨김)
 - **수용 기준**:
-  - [ ] search-restaurants가 빈 배열을 반환 → 메뉴 카드는 유지, 식당 영역만 restaurant-empty로 교체
-  - [ ] search-restaurants가 throw → 메뉴 카드는 유지, 식당 영역만 restaurant-empty로 교체
-  - [ ] restaurant-empty 외부 링크 `href`가 `https://map.kakao.com/?q={메뉴명}` 형태이며 `target="_blank"`
-  - [ ] restaurant-empty 상태에서 지도 컴포넌트는 렌더되지 않는다
+  - [x] search-restaurants가 빈 배열을 반환 → 메뉴 카드는 유지, 식당 영역만 restaurant-empty로 교체
+  - [x] search-restaurants가 throw → 메뉴 카드는 유지, 식당 영역만 restaurant-empty로 교체
+  - [x] restaurant-empty 외부 링크 `href`가 `https://map.kakao.com/?q={메뉴명}` 형태이며 `target="_blank"`
+  - [x] restaurant-empty 상태에서 지도 컴포넌트는 렌더되지 않는다
 - **검증**:
   - `bun run test app/page.test.tsx components/menu-decider/restaurant-empty.test.tsx`
 

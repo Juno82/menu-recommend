@@ -11,6 +11,7 @@ import { MenuCard } from "@/components/menu-decider/menu-card";
 import { RecommendationError } from "@/components/menu-decider/recommendation-error";
 import { RegionInput } from "@/components/menu-decider/region-input";
 import { RestaurantCard } from "@/components/menu-decider/restaurant-card";
+import { RestaurantEmpty } from "@/components/menu-decider/restaurant-empty";
 import { RestaurantMap } from "@/components/menu-decider/restaurant-map";
 import { RestaurantSkeletonList } from "@/components/menu-decider/restaurant-skeleton";
 import { Button } from "@/components/ui/button";
@@ -213,6 +214,8 @@ export default function Page() {
                 )}
               </div>
             </div>
+          ) : restaurants && restaurants.length === 0 ? (
+            <RestaurantEmpty menuName={recommendation.menu} />
           ) : null}
         </section>
       </main>

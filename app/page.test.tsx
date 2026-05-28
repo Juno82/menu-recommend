@@ -525,3 +525,58 @@ describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
     expect(previousMenu).toHaveClass("line-through");
   });
 });
+
+describe("Page — Task 9 (식당 없음 fallback)", () => {
+  it("shows restaurant-empty fallback when searchRestaurants returns an empty array (Scenario 4)", async () => {
+    mockedDecide.mockResolvedValue({ menu: "평양냉면", reason: "더운 오후엔" });
+    mockedSearch.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("평양냉면"));
+
+    expect(
+      screen.getByText(/근처에서 평양냉면 식당을 찾지 못했습니다/),
+    ).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /카카오맵에서.+검색/ });
+    expect(link).toHaveAttribute(
+      "href",
+      `https://map.kakao.com/?q=${encodeURIComponent("평양냉면")}`,
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(screen.queryByTestId("restaurant-map")).not.toBeInTheDocument();
+  });
+
+  it("shows restaurant-empty fallback when searchRestaurants rejects", async () => {
+    mockedDecide.mockResolvedValue({ menu: "평양냉면", reason: "더운 오후엔" });
+    mockedSearch.mockRejectedValue(new Error("kakao api failed"));
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("평양냉면"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/근처에서 평양냉면 식당을 찾지 못했습니다/),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("keeps the menu card visible in the restaurant-empty state", async () => {
+    mockedDecide.mockResolvedValue({ menu: "평양냉면", reason: "더운 오후엔" });
+    mockedSearch.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("평양냉면"));
+
+    expect(screen.getByText("평양냉면")).toBeInTheDocument();
+    expect(screen.getByText("오늘의 메뉴")).toBeInTheDocument();
+  });
+});
