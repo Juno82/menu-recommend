@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { decideMenuAction } from "@/app/actions/decide-menu";
 import { ContextDisplay } from "@/components/menu-decider/context-display";
 import { MenuCard } from "@/components/menu-decider/menu-card";
+import { RecommendationError } from "@/components/menu-decider/recommendation-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import type { MenuRecommendation, RecommendationContext, Weather } from "@/types
 export default function Page() {
   const [prompt, setPrompt] = useState("");
   const [recommendation, setRecommendation] = useState<MenuRecommendation | null>(null);
+  const [decideError, setDecideError] = useState<Error | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const geo = useGeolocation();
@@ -41,6 +43,7 @@ export default function Page() {
 
   const requestRecommendation = () => {
     if (geo.status !== "granted" || !weather) return;
+    setDecideError(null);
     startTransition(async () => {
       const context: RecommendationContext = {
         coords: geo.coords,
@@ -50,16 +53,26 @@ export default function Page() {
         prompt: prompt.trim() ? prompt.trim() : undefined,
         excludedMenus: [],
       };
-      const result = await decideMenuAction(context);
-      setRecommendation(result);
+      try {
+        const result = await decideMenuAction(context);
+        setRecommendation(result);
+      } catch (err) {
+        setDecideError(err instanceof Error ? err : new Error(String(err)));
+        setRecommendation(null);
+      }
     });
   };
 
-  const reset = () => setRecommendation(null);
+  const reset = () => {
+    setRecommendation(null);
+    setDecideError(null);
+  };
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl p-6">
-      {recommendation ? (
+      {decideError ? (
+        <RecommendationError onRetry={requestRecommendation} isRetrying={isPending} />
+      ) : recommendation ? (
         <MenuCard
           recommendation={recommendation}
           isRetrying={isPending}

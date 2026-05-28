@@ -172,9 +172,9 @@
   - `components/menu-decider/recommendation-error.tsx` ("추천을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요" + "다시 시도" 버튼 + "이전에 입력한 조건은 그대로 유지됩니다" 안내)
   - `app/page.tsx` 업데이트 (decide-menu Server Action 실패 catch → recommendation-error 표시, 성공 시 메뉴 카드 표시)
 - **수용 기준**:
-  - [ ] decide-menu Server Action이 throw → "추천을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요" + "다시 시도" 버튼 표시
-  - [ ] 실패 상태에서 메뉴 카드 영역은 표시되지 않는다
-  - [ ] "다시 시도" 클릭 → 이전 입력값(프롬프트, 위치)이 유지된 채로 decide-menu가 재호출된다 (mock이 두 번 호출되고 두 번째 호출의 인자가 첫 번째와 같음을 외부적으로 단언 — 그 결과 카드가 표시되는 것으로 검증)
+  - [x] decide-menu Server Action이 throw → "추천을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요" + "다시 시도" 버튼 표시
+  - [x] 실패 상태에서 메뉴 카드 영역은 표시되지 않는다
+  - [x] "다시 시도" 클릭 → 이전 입력값(프롬프트, 위치)이 유지된 채로 decide-menu가 재호출된다 (mock이 두 번 호출되고 두 번째 호출의 인자가 첫 번째와 같음을 외부적으로 단언 — 그 결과 카드가 표시되는 것으로 검증)
 - **검증**:
   - `bun run test app/page.test.tsx components/menu-decider/recommendation-error.test.tsx`
 

@@ -154,3 +154,52 @@ describe("Page — Task 2 (자동 수집)", () => {
     expect(reasonNode).toBeInTheDocument();
   });
 });
+
+describe("Page — Task 3 (LLM 실패 처리)", () => {
+  it("shows the error card and a '다시 시도' button when decideMenuAction rejects (Scenario 6)", async () => {
+    mockedDecide.mockRejectedValue(new Error("LLM unavailable"));
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/추천을 불러오지 못했습니다/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/잠시 후 다시 시도해 주세요/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /다시 시도/ })).toBeInTheDocument();
+  });
+
+  it("does not render the menu card area in the error state", async () => {
+    mockedDecide.mockRejectedValue(new Error("LLM unavailable"));
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText(/추천을 불러오지 못했습니다/));
+
+    expect(screen.queryByText("오늘의 메뉴")).not.toBeInTheDocument();
+  });
+
+  it("re-invokes decide-menu with the same prompt when '다시 시도' is clicked", async () => {
+    mockedDecide
+      .mockRejectedValueOnce(new Error("first fail"))
+      .mockResolvedValueOnce({ menu: "칼국수", reason: "비 오는 점심엔 칼국수" });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.type(screen.getByLabelText(/조건/), "해장");
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText(/추천을 불러오지 못했습니다/));
+
+    await user.click(screen.getByRole("button", { name: /다시 시도/ }));
+
+    await waitFor(() => expect(screen.getByText("칼국수")).toBeInTheDocument());
+    expect(mockedDecide).toHaveBeenCalledTimes(2);
+    expect(mockedDecide.mock.calls[0]?.[0].prompt).toBe("해장");
+    expect(mockedDecide.mock.calls[1]?.[0].prompt).toBe("해장");
+  });
+});
