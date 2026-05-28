@@ -360,3 +360,33 @@ describe("Page — Task 5 (식당별 추정 메뉴 LLM)", () => {
     expect(disclaimers).toHaveLength(3);
   });
 });
+
+describe("Page — Task 6 (카카오맵 지도)", () => {
+  it("renders the map container alongside restaurant cards", async () => {
+    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedSearch.mockResolvedValue(sampleRestaurants);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("김씨네 칼국수"));
+
+    const map = screen.getByTestId("restaurant-map");
+    expect(map).toBeInTheDocument();
+    expect(map).toHaveAttribute("aria-label", "식당 위치 지도");
+  });
+
+  it("does not render the map when there are no restaurants", async () => {
+    mockedDecide.mockResolvedValue({ menu: "냉면", reason: "이유" });
+    mockedSearch.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => expect(mockedSearch).toHaveBeenCalled());
+
+    expect(screen.queryByTestId("restaurant-map")).not.toBeInTheDocument();
+  });
+});

@@ -9,6 +9,7 @@ import { ContextDisplay } from "@/components/menu-decider/context-display";
 import { MenuCard } from "@/components/menu-decider/menu-card";
 import { RecommendationError } from "@/components/menu-decider/recommendation-error";
 import { RestaurantCard } from "@/components/menu-decider/restaurant-card";
+import { RestaurantMap } from "@/components/menu-decider/restaurant-map";
 import { RestaurantSkeletonList } from "@/components/menu-decider/restaurant-skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,15 +154,24 @@ export default function Page() {
           {isSearchingRestaurants ? (
             <RestaurantSkeletonList />
           ) : restaurants && restaurants.length > 0 ? (
-            <div className="space-y-3">
-              {restaurants.map((r, idx) => (
-                <RestaurantCard
-                  key={r.id}
-                  restaurant={r}
-                  pinNumber={idx + 1}
-                  estimatedMenu={estimatedMenus[r.id]}
-                />
-              ))}
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
+              <div className="space-y-3 md:col-span-3">
+                {restaurants.map((r, idx) => (
+                  <RestaurantCard
+                    key={r.id}
+                    restaurant={r}
+                    pinNumber={idx + 1}
+                    estimatedMenu={estimatedMenus[r.id]}
+                  />
+                ))}
+              </div>
+              <div className="md:col-span-2">
+                {geo.status === "granted" && (
+                  <div className="md:sticky md:top-6">
+                    <RestaurantMap restaurants={restaurants} center={geo.coords} />
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
         </section>

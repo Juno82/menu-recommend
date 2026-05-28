@@ -248,9 +248,9 @@
   - `components/menu-decider/restaurant-map.tsx` (dynamic import only, no SSR, props: `restaurants: Restaurant[]` → 핀 3개 + 라벨 1/2/3)
   - `app/page.tsx` 업데이트 (식당 카드 영역 옆 지도)
 - **수용 기준**:
-  - [ ] 결과 화면에 카카오맵이 렌더되고 식당 좌표 3곳에 마커(번호 1/2/3)가 표시된다
-  - [ ] 데스크톱 viewport에서 지도가 식당 카드 우측에 위치한다 (`@md:` grid 사용)
-  - [ ] 모바일 viewport에서 지도가 식당 카드 아래에 위치한다
+  - [x] 결과 화면에 카카오맵이 렌더되고 식당 좌표 3곳에 마커(번호 1/2/3)가 표시된다
+  - [x] 데스크톱 viewport에서 지도가 식당 카드 우측에 위치한다 (`@md:` grid 사용)
+  - [x] 모바일 viewport에서 지도가 식당 카드 아래에 위치한다
 - **검증**:
   - `bun run build`
   - Browser MCP — Desktop·Mobile viewport 레이아웃, 증거 `artifacts/menu-decider/evidence/task-6-map-{desktop,mobile}.png`
