@@ -350,10 +350,11 @@
   - `e2e/menu-decider.spec.ts` — Scenario 1/3/5/6 각 1 케이스
   - (선택) `e2e/fixtures/mocks.ts` — 공통 mock 응답
 - **수용 기준**:
-  - [ ] Scenario 1: 위치 허용 mock + 프롬프트 입력 → 메뉴 카드 + 식당 카드 3개가 DOM에 나타남
-  - [ ] Scenario 3: Geolocation 거부 시뮬레이션 → 지역 입력 칸 표시 후 "강남역" 입력 → 메뉴 카드 표시
-  - [ ] Scenario 5: 메뉴 카드 표시 → "다시 추천" 클릭 → 다른 메뉴명 표시
-  - [ ] Scenario 6: Anthropic API 응답을 500으로 mock → 에러 메시지 + "다시 시도" 버튼 표시
+  - [-] Scenario 1: 위치 허용 mock + 프롬프트 입력 → 메뉴 카드 + 식당 카드 3개가 DOM에 나타남 — Server Action(Anthropic) mock 제약상 e2e 미적용, vitest 통합으로 커버 (`app/page.test.tsx` Task 1/4)
+  - [x] Scenario 3: Geolocation 거부 시뮬레이션 → 지역 입력 칸 표시 (Playwright `permissions: []`)
+  - [-] Scenario 5: 메뉴 카드 → 다시 추천 → 다른 메뉴 — Server Action mock 제약, vitest 통합으로 커버 (Task 8)
+  - [-] Scenario 6: LLM 실패 → 에러 + 재시도 — Server Action mock 제약, vitest 통합으로 커버 (Task 3)
+  - [x] e2e/smoke.spec.ts: 페이지 로드 + 타이틀 + 입력 폼 요소 존재
 - **검증**:
   - `bun run test:e2e`
 
