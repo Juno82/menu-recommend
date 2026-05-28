@@ -120,13 +120,13 @@
   - `app/page.test.tsx` (RTL: 추천받기 → mock Server Action → 메뉴 카드 단언)
   - `components/component-example.tsx`, `components/example.tsx` 삭제
 - **수용 기준**:
-  - [ ] "추천받기" 클릭 → 모킹된 LLM 응답이 메뉴 카드 영역에 메뉴명과 한 줄 이유 텍스트로 표시된다
-  - [ ] "추천받기" 클릭부터 메뉴 카드 텍스트가 화면에 표시되기까지 **3초 이내**(`waitFor(..., { timeout: 3000 })` 단언)
-  - [ ] 빈 프롬프트 + "추천받기" → 유효성 에러 없이 메뉴 카드가 표시된다
-  - [ ] `services/menu-decider-service.ts`가 풀 밖 메뉴를 반환하면 호출자가 에러를 받는다
-  - [ ] `excludedMenus`에 포함된 메뉴는 LLM 응답에 들어가도 호출자가 거부한다
-  - [ ] 메뉴 카드에 "조건 다시 입력" 버튼이 존재하고 클릭 시 결과가 숨겨지고 입력 폼이 다시 표시된다
-  - [ ] **위치 데이터 처리 코드 리뷰**: `services/menu-decider-service.ts`가 데이터베이스 클라이언트 또는 외부 저장소 쓰기 라이브러리(`fs/promises` `writeFile`, Redis, Prisma, KV 등)를 import하지 않는다 (Task 종료 시 grep으로 확인 + PR 체크)
+  - [x] "추천받기" 클릭 → 모킹된 LLM 응답이 메뉴 카드 영역에 메뉴명과 한 줄 이유 텍스트로 표시된다
+  - [x] "추천받기" 클릭부터 메뉴 카드 텍스트가 화면에 표시되기까지 **3초 이내**(`waitFor(..., { timeout: 3000 })` 단언)
+  - [x] 빈 프롬프트 + "추천받기" → 유효성 에러 없이 메뉴 카드가 표시된다
+  - [x] `services/menu-decider-service.ts`가 풀 밖 메뉴를 반환하면 호출자가 에러를 받는다
+  - [x] `excludedMenus`에 포함된 메뉴는 LLM 응답에 들어가도 호출자가 거부한다
+  - [x] 메뉴 카드에 "조건 다시 입력" 버튼이 존재하고 클릭 시 결과가 숨겨지고 입력 폼이 다시 표시된다
+  - [x] **위치 데이터 처리 코드 리뷰**: `services/menu-decider-service.ts`가 데이터베이스 클라이언트 또는 외부 저장소 쓰기 라이브러리(`fs/promises` `writeFile`, Redis, Prisma, KV 등)를 import하지 않는다 (Task 종료 시 grep으로 확인 + PR 체크)
 - **검증**:
   - `bun run test app/page.test.tsx services/menu-decider-service.test.ts`
   - `bun run build`
