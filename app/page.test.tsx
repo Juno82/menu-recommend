@@ -450,3 +450,78 @@ describe("Page — Task 7 (위치 거부 fallback)", () => {
     );
   });
 });
+
+describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
+  it("passes previously viewed menus as excludedMenus on re-recommend", async () => {
+    mockedDecide
+      .mockResolvedValueOnce({ menu: "칼국수", reason: "비 오는 점심" })
+      .mockResolvedValueOnce({ menu: "된장찌개", reason: "쌀쌀한 날 든든하게" });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("칼국수"));
+
+    await user.click(screen.getByRole("button", { name: /다시 추천/ }));
+    await waitFor(() => screen.getByText("된장찌개"));
+
+    expect(mockedDecide).toHaveBeenCalledTimes(2);
+    expect(mockedDecide.mock.calls[0]?.[0].excludedMenus).toEqual([]);
+    expect(mockedDecide.mock.calls[1]?.[0].excludedMenus).toEqual(["칼국수"]);
+  });
+
+  it("shows the new menu within 3 seconds of clicking 다시 추천", async () => {
+    mockedDecide
+      .mockResolvedValueOnce({ menu: "칼국수", reason: "이유" })
+      .mockResolvedValueOnce({ menu: "된장찌개", reason: "다른 이유" });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("칼국수"));
+
+    await user.click(screen.getByRole("button", { name: /다시 추천/ }));
+    await waitFor(
+      () => expect(screen.getByText("된장찌개")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+  });
+
+  it("shows '새로 추천됨' badge from the second recommendation onward (not on the first)", async () => {
+    mockedDecide
+      .mockResolvedValueOnce({ menu: "칼국수", reason: "이유 1" })
+      .mockResolvedValueOnce({ menu: "된장찌개", reason: "이유 2" });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("칼국수"));
+    expect(screen.queryByText("새로 추천됨")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /다시 추천/ }));
+    await waitFor(() => screen.getByText("된장찌개"));
+    expect(screen.getByText("새로 추천됨")).toBeInTheDocument();
+  });
+
+  it("renders previously viewed menus with strikethrough on the menu card", async () => {
+    mockedDecide
+      .mockResolvedValueOnce({ menu: "칼국수", reason: "이유 1" })
+      .mockResolvedValueOnce({ menu: "된장찌개", reason: "이유 2" });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("칼국수"));
+
+    await user.click(screen.getByRole("button", { name: /다시 추천/ }));
+    await waitFor(() => screen.getByText("된장찌개"));
+
+    expect(screen.getByText(/이번 세션에서 본 메뉴/)).toBeInTheDocument();
+    const previousMenu = screen.getByText("칼국수");
+    expect(previousMenu).toHaveClass("line-through");
+  });
+});

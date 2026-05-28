@@ -38,6 +38,7 @@ export default function Page() {
   const [restaurants, setRestaurants] = useState<Restaurant[] | null>(null);
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
   const [estimatedMenus, setEstimatedMenus] = useState<Record<string, EstimatedRestaurantMenu>>({});
+  const [viewedMenus, setViewedMenus] = useState<string[]>([]);
 
   const geo = useGeolocation();
   const [resolvedRegion, setResolvedRegion] = useState<ResolvedRegion | null>(null);
@@ -128,23 +129,25 @@ export default function Page() {
         weather,
         timeOfDay,
         prompt: prompt.trim() ? prompt.trim() : undefined,
-        excludedMenus: [],
+        excludedMenus: viewedMenus,
       };
       try {
         const result = await decideMenuAction(context);
         setRecommendation(result);
+        setViewedMenus((prev) => (prev.includes(result.menu) ? prev : [...prev, result.menu]));
       } catch (err) {
         setDecideError(err instanceof Error ? err : new Error(String(err)));
         setRecommendation(null);
       }
     });
-  }, [activeCoords, activeRegionLabel, weather, timeOfDay, prompt]);
+  }, [activeCoords, activeRegionLabel, weather, timeOfDay, prompt, viewedMenus]);
 
   const reset = () => {
     setRecommendation(null);
     setDecideError(null);
     setRestaurants(null);
     setEstimatedMenus({});
+    setViewedMenus([]);
   };
 
   const submitRegion = (regionName: string) => {
@@ -178,6 +181,7 @@ export default function Page() {
           <MenuCard
             recommendation={recommendation}
             isRetrying={isPending}
+            viewedMenus={viewedMenus}
             onRetry={requestRecommendation}
             onReset={reset}
           />
