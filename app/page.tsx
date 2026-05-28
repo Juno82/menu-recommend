@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { decideMenuAction } from "@/app/actions/decide-menu";
 import { estimateMenusAction } from "@/app/actions/estimate-menus";
 import { resolveRegionAction } from "@/app/actions/resolve-region";
@@ -39,6 +39,7 @@ export default function Page() {
   const [restaurants, setRestaurants] = useState<Restaurant[] | null>(null);
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
   const [estimatedMenus, setEstimatedMenus] = useState<Record<string, EstimatedRestaurantMenu>>({});
+  const [estimateError, setEstimateError] = useState(false);
   const [viewedMenus, setViewedMenus] = useState<string[]>([]);
 
   const geo = useGeolocation();
@@ -50,20 +51,20 @@ export default function Page() {
   const timeOfDay = getTimeOfDay();
 
   // 활성 좌표/지역 라벨 — geo 허용이면 hook, 거부면 사용자가 resolve한 지역
-  const activeCoords: Coords | null =
-    geo.status === "granted"
-      ? geo.coords
-      : resolvedRegion
-        ? resolvedRegion.coords
-        : null;
-  const activeRegionLabel: string | null =
-    geo.status === "granted"
-      ? "현재 위치"
-      : resolvedRegion
-        ? resolvedRegion.label
-        : null;
+  // useMemo로 참조 안정화 — 인라인 객체가 useEffect 재실행을 폭주시키지 않도록
+  const activeCoords = useMemo<Coords | null>(() => {
+    if (geo.status === "granted") return geo.coords;
+    if (resolvedRegion) return resolvedRegion.coords;
+    return null;
+  }, [geo, resolvedRegion]);
 
-  // 좌표 결정되면 날씨 fetch
+  const activeRegionLabel = useMemo<string | null>(() => {
+    if (geo.status === "granted") return "현재 위치";
+    if (resolvedRegion) return resolvedRegion.label;
+    return null;
+  }, [geo.status, resolvedRegion]);
+
+  // 좌표 결정되면 날씨 fetch — 실패 시 sentinel 값으로 fallback해 UI 고착 방지
   useEffect(() => {
     if (!activeCoords) return;
     let cancelled = false;
@@ -72,7 +73,9 @@ export default function Page() {
       .then((w) => {
         if (!cancelled) setWeather(w);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setWeather({ condition: "정보 없음", tempC: 0 });
+      });
     return () => {
       cancelled = true;
     };
@@ -104,6 +107,7 @@ export default function Page() {
   useEffect(() => {
     if (!recommendation || !restaurants || restaurants.length === 0) return;
     let cancelled = false;
+    setEstimateError(false);
     estimateMenusAction(recommendation.menu, restaurants)
       .then((estimated) => {
         if (cancelled) return;
@@ -111,7 +115,9 @@ export default function Page() {
         for (const e of estimated) map[e.restaurantId] = e;
         setEstimatedMenus(map);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setEstimateError(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -197,6 +203,11 @@ export default function Page() {
           ) : restaurants && restaurants.length > 0 ? (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
               <div className="space-y-3 md:col-span-3">
+                {estimateError && (
+                  <p className="text-xs text-muted-foreground">
+                    추정 메뉴 정보를 가져오지 못했습니다. 가게에서 직접 확인해 주세요.
+                  </p>
+                )}
                 {restaurants.map((r, idx) => (
                   <RestaurantCard
                     key={r.id}

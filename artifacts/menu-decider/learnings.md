@@ -40,10 +40,40 @@ applied: rule
 
 ---
 category: refactor
-applied: not-yet
+applied: rule
 ---
-## services/{menu-decider, restaurant-menu-estimator}-service.ts에 LLM 호출 패턴 중복
+## LLM 호출 패턴 중복 → lib/llm-client.ts 추출 (code-reviewer S-1 채택)
 
-**상황**: Task 1과 Task 5에서 비슷한 패턴 — `LLMClient` 타입, `extractText`, JSON 파싱 helper. 약 20-30줄 중복.
-**판단**: Task 5 진행 중에 인지했으나 같은 커밋 안에서 simplify하면 Task 경계가 흐려져 미뤘다. Step 5 code-reviewer 단계에서 `/simplify` 트리거 후보로 가져갈 만함. 두 서비스가 더 늘면 (Task 11 같은 가상의 3차 LLM 호출) `lib/llm-client.ts`로 추상화.
-**다시 마주칠 가능성**: 중간 — LLM 통합 여러 곳에서 발생하는 일반 패턴.
+**상황**: Task 1과 Task 5에서 `LLMClient` 타입, `extractText`, `MessagesResponse` alias가 두 서비스에 복제. code-reviewer가 S-1으로 다시 지적해 패턴 인식 임계점 도달.
+**판단**: Step 4 후 `lib/llm-client.ts`로 `LLMClient` 타입 + `extractText` 함수 추출. 두 서비스 모두 import로 교체. 새 LLM 서비스 도입 시 추가 호출 헬퍼는 모두 lib에 집중.
+**다시 마주칠 가능성**: 높음 — LLM 통합 여러 곳에서 반복. **일반화 규칙**: 비슷한 호출 패턴이 2번째 발생 시 즉시 lib로 추출. 3번째에 미루지 말 것.
+
+---
+category: code-review
+applied: rule
+---
+## 인라인 ternary 결과값을 useEffect deps에 두지 말 것 (code-reviewer I-1)
+
+**상황**: `const activeCoords = geo.status === "granted" ? geo.coords : resolvedRegion?.coords ?? null`을 직접 useEffect deps로 사용 → 렌더마다 새 객체 ref → 날씨/식당/지도 useEffect가 매 리렌더마다 재실행될 위험.
+**판단**: `useMemo`로 활성 좌표/지역 라벨 모두 안정화. 현재 사용 패턴에선 체감 증상 없었으나 향후 state 추가 시 표면화 가능.
+**다시 마주칠 가능성**: 높음 — React 컴포넌트에서 흔한 함정. **일반화 규칙**: useEffect deps에 ternary/spread/object literal 결과가 들어가면 useMemo로 안정화.
+
+---
+category: code-review
+applied: rule
+---
+## 외부 API 실패에 항상 fallback 또는 사용자 노출 (code-reviewer I-2, I-4, S-5)
+
+**상황**: `fetchWeather.catch(() => {})`로 silent fail → weather가 영원히 undefined → 추천받기 영구 비활성. 비슷하게 estimator 실패도 사일런트 → "추정 메뉴 로딩 중..." 고착. estimator의 restaurantId 무결성도 미검증.
+**판단**: weather 실패는 sentinel `{ condition: "정보 없음", tempC: 0 }`로 fallback해 UI 진행 유지. estimator 실패는 `estimateError` state로 사용자 안내 표시. estimator는 validIds Set으로 응답 무결성 검증.
+**다시 마주칠 가능성**: 높음 — 외부 API 통합 시 흔한 함정. **일반화 규칙**: `.catch(() => {})` 패턴 금지. 항상 ① 사용자 노출 또는 ② sentinel fallback 둘 중 하나.
+
+---
+category: code-review
+applied: rule
+---
+## 비동기 콜백 cleanup은 hook에도 일관되게 (code-reviewer I-3)
+
+**상황**: `app/page.tsx`의 모든 useEffect는 `cancelled` flag로 unmount 후 setState를 방지하나, `hooks/use-geolocation.ts`만 cleanup 누락. `navigator.geolocation.getCurrentPosition` 콜백이 unmount 후 도착 시 setState 호출.
+**판단**: hook에도 동일 cleanup 패턴 적용. cleanup이 컴포넌트 useEffect에만 있는 게 아니라 hook의 useEffect에도 동등하게 필요.
+**다시 마주칠 가능성**: 중간 — hook 작성 시 자주 잊는 패턴.

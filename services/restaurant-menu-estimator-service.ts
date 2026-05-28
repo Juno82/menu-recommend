@@ -1,13 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { extractText, type LLMClient } from "@/lib/llm-client";
 import type { EstimatedRestaurantMenu, Restaurant } from "@/types/menu-decider";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1024;
 const MAX_ITEMS_PER_RESTAURANT = 3;
 
-export type LLMClient = {
-  messages: Pick<Anthropic["messages"], "create">;
-};
+export type { LLMClient };
 
 export type EstimatorInput = {
   menu: string;
@@ -30,11 +29,14 @@ export async function estimateRestaurantMenus(
 
   const text = extractText(response);
   const parsed = parseEstimated(text);
+  const validIds = new Set(input.restaurants.map((r) => r.id));
 
-  return parsed.map((entry) => ({
-    restaurantId: entry.restaurantId,
-    items: entry.items.slice(0, MAX_ITEMS_PER_RESTAURANT),
-  }));
+  return parsed
+    .filter((entry) => validIds.has(entry.restaurantId))
+    .map((entry) => ({
+      restaurantId: entry.restaurantId,
+      items: entry.items.slice(0, MAX_ITEMS_PER_RESTAURANT),
+    }));
 }
 
 const SYSTEM_PROMPT = `당신은 한국 식당 메뉴 추정 도우미입니다. 식당의 이름과 카테고리만 보고, 그 식당이 일반적으로 팔 만한 대표 메뉴 1-3개와 추정 가격대를 한국 원화로 답합니다.
@@ -59,22 +61,6 @@ function buildUserPrompt(input: EstimatorInput): string {
 ${list}
 
 위 ${input.restaurants.length}개 식당 각각의 추정 메뉴를 응답하세요.`;
-}
-
-type MessagesResponse = Awaited<ReturnType<Anthropic["messages"]["create"]>>;
-
-function extractText(response: MessagesResponse | { content: unknown[] }): string {
-  const blocks = (response as { content: unknown[] }).content;
-  return blocks
-    .filter(
-      (block): block is { type: "text"; text: string } =>
-        typeof block === "object" &&
-        block !== null &&
-        (block as { type?: string }).type === "text" &&
-        typeof (block as { text?: unknown }).text === "string",
-    )
-    .map((block) => block.text)
-    .join("");
 }
 
 type ParsedEntry = {

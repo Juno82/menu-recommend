@@ -1,13 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { MENU_POOL, isMenuInPool } from "@/config/menu-pool";
+import { extractText, type LLMClient } from "@/lib/llm-client";
 import type { MenuRecommendation, RecommendationContext } from "@/types/menu-decider";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 256;
 
-export type LLMClient = {
-  messages: Pick<Anthropic["messages"], "create">;
-};
+export type { LLMClient };
 
 export class MenuPoolViolationError extends Error {
   constructor(readonly menuName: string) {
@@ -95,22 +94,6 @@ function buildUserPrompt(context: RecommendationContext): string {
     parts.push(`이미 추천한 메뉴 (제외): ${context.excludedMenus.join(", ")}`);
   }
   return parts.join("\n");
-}
-
-type MessagesResponse = Awaited<ReturnType<Anthropic["messages"]["create"]>>;
-
-function extractText(response: MessagesResponse | { content: unknown[] }): string {
-  const blocks = (response as { content: unknown[] }).content;
-  return blocks
-    .filter(
-      (block): block is { type: "text"; text: string } =>
-        typeof block === "object" &&
-        block !== null &&
-        (block as { type?: string }).type === "text" &&
-        typeof (block as { text?: unknown }).text === "string",
-    )
-    .map((block) => block.text)
-    .join("");
 }
 
 function parseRecommendation(text: string): MenuRecommendation {
