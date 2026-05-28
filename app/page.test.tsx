@@ -13,6 +13,9 @@ vi.mock("@/app/actions/search-restaurants", () => ({
 vi.mock("@/app/actions/estimate-menus", () => ({
   estimateMenusAction: vi.fn(),
 }));
+vi.mock("@/app/actions/resolve-region", () => ({
+  resolveRegionAction: vi.fn(),
+}));
 vi.mock("@/hooks/use-geolocation", () => ({
   useGeolocation: vi.fn(),
 }));
@@ -26,6 +29,7 @@ vi.mock("@/lib/time-of-day", () => ({
 const { decideMenuAction } = await import("@/app/actions/decide-menu");
 const { searchRestaurantsAction } = await import("@/app/actions/search-restaurants");
 const { estimateMenusAction } = await import("@/app/actions/estimate-menus");
+const { resolveRegionAction } = await import("@/app/actions/resolve-region");
 const { useGeolocation } = await import("@/hooks/use-geolocation");
 const { fetchWeather } = await import("@/lib/weather");
 const { getTimeOfDay } = await import("@/lib/time-of-day");
@@ -33,6 +37,7 @@ const { getTimeOfDay } = await import("@/lib/time-of-day");
 const mockedDecide = vi.mocked(decideMenuAction);
 const mockedSearch = vi.mocked(searchRestaurantsAction);
 const mockedEstimate = vi.mocked(estimateMenusAction);
+const mockedResolveRegion = vi.mocked(resolveRegionAction);
 const mockedGeo = vi.mocked(useGeolocation);
 const mockedWeather = vi.mocked(fetchWeather);
 const mockedTimeOfDay = vi.mocked(getTimeOfDay);
@@ -41,6 +46,7 @@ beforeEach(() => {
   mockedDecide.mockReset();
   mockedSearch.mockReset();
   mockedEstimate.mockReset();
+  mockedResolveRegion.mockReset();
   mockedGeo.mockReset();
   mockedWeather.mockReset();
   mockedTimeOfDay.mockReset();
@@ -388,5 +394,59 @@ describe("Page — Task 6 (카카오맵 지도)", () => {
     await waitFor(() => expect(mockedSearch).toHaveBeenCalled());
 
     expect(screen.queryByTestId("restaurant-map")).not.toBeInTheDocument();
+  });
+});
+
+describe("Page — Task 7 (위치 거부 fallback)", () => {
+  it("shows the region input with the guidance message when geolocation is denied (Scenario 3)", () => {
+    mockedGeo.mockReturnValue({ status: "denied" });
+    render(<Page />);
+    expect(screen.getByText(/위치 정보를 사용할 수 없어요/)).toBeInTheDocument();
+    expect(screen.getByText(/지역을 입력해 주세요/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/지역명/)).toBeInTheDocument();
+  });
+
+  it("resolves '강남역' and triggers a weather fetch for the resolved coords", async () => {
+    mockedGeo.mockReturnValue({ status: "denied" });
+    mockedResolveRegion.mockResolvedValue({
+      ok: true,
+      region: { coords: { lat: 37.4979, lng: 127.0276 }, label: "강남역" },
+    });
+    const user = userEvent.setup();
+    render(<Page />);
+
+    await user.type(screen.getByLabelText(/지역명/), "강남역");
+    await user.click(screen.getByRole("button", { name: /^확인/ }));
+
+    await waitFor(() =>
+      expect(mockedResolveRegion).toHaveBeenCalledWith("강남역"),
+    );
+    await waitFor(() =>
+      expect(mockedWeather).toHaveBeenCalledWith({ lat: 37.4979, lng: 127.0276 }),
+    );
+    await waitFor(() => {
+      const submit = screen.getByRole("button", { name: /추천받기/ });
+      expect(submit).not.toBeDisabled();
+    });
+  });
+
+  it("shows '지역을 찾을 수 없습니다' when resolveRegionAction returns not_found", async () => {
+    mockedGeo.mockReturnValue({ status: "denied" });
+    mockedResolveRegion.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      message: "Region not found",
+    });
+    const user = userEvent.setup();
+    render(<Page />);
+
+    await user.type(screen.getByLabelText(/지역명/), "존재안함");
+    await user.click(screen.getByRole("button", { name: /^확인/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/지역을 찾을 수 없습니다.+다시 입력해 주세요/),
+      ).toBeInTheDocument(),
+    );
   });
 });

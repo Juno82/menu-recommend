@@ -4,10 +4,12 @@ import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { decideMenuAction } from "@/app/actions/decide-menu";
 import { estimateMenusAction } from "@/app/actions/estimate-menus";
+import { resolveRegionAction } from "@/app/actions/resolve-region";
 import { searchRestaurantsAction } from "@/app/actions/search-restaurants";
 import { ContextDisplay } from "@/components/menu-decider/context-display";
 import { MenuCard } from "@/components/menu-decider/menu-card";
 import { RecommendationError } from "@/components/menu-decider/recommendation-error";
+import { RegionInput } from "@/components/menu-decider/region-input";
 import { RestaurantCard } from "@/components/menu-decider/restaurant-card";
 import { RestaurantMap } from "@/components/menu-decider/restaurant-map";
 import { RestaurantSkeletonList } from "@/components/menu-decider/restaurant-skeleton";
@@ -17,7 +19,9 @@ import { Label } from "@/components/ui/label";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { getTimeOfDay } from "@/lib/time-of-day";
 import { fetchWeather } from "@/lib/weather";
+import type { ResolvedRegion } from "@/services/kakao-geocoding-service";
 import type {
+  Coords,
   EstimatedRestaurantMenu,
   MenuRecommendation,
   RecommendationContext,
@@ -36,37 +40,55 @@ export default function Page() {
   const [estimatedMenus, setEstimatedMenus] = useState<Record<string, EstimatedRestaurantMenu>>({});
 
   const geo = useGeolocation();
+  const [resolvedRegion, setResolvedRegion] = useState<ResolvedRegion | null>(null);
+  const [regionResolveError, setRegionResolveError] = useState<string | null>(null);
+  const [isResolvingRegion, setIsResolvingRegion] = useState(false);
+
   const [weather, setWeather] = useState<Weather | undefined>(undefined);
   const timeOfDay = getTimeOfDay();
 
+  // 활성 좌표/지역 라벨 — geo 허용이면 hook, 거부면 사용자가 resolve한 지역
+  const activeCoords: Coords | null =
+    geo.status === "granted"
+      ? geo.coords
+      : resolvedRegion
+        ? resolvedRegion.coords
+        : null;
+  const activeRegionLabel: string | null =
+    geo.status === "granted"
+      ? "현재 위치"
+      : resolvedRegion
+        ? resolvedRegion.label
+        : null;
+
+  // 좌표 결정되면 날씨 fetch
   useEffect(() => {
-    if (geo.status !== "granted") return;
+    if (!activeCoords) return;
     let cancelled = false;
-    fetchWeather(geo.coords)
+    setWeather(undefined);
+    fetchWeather(activeCoords)
       .then((w) => {
         if (!cancelled) setWeather(w);
       })
-      .catch(() => {
-        // 날씨 실패는 Task 후속에서 통일 에러 처리. 지금은 weather 미설정 상태로 둠.
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [geo]);
+  }, [activeCoords]);
 
-  // 메뉴 결정 도착 → 식당 검색 트리거
+  // 메뉴 결정 도착 → 식당 검색
   useEffect(() => {
-    if (!recommendation || geo.status !== "granted") return;
+    if (!recommendation || !activeCoords) return;
     let cancelled = false;
     setRestaurants(null);
     setEstimatedMenus({});
     setIsSearchingRestaurants(true);
-    searchRestaurantsAction(recommendation.menu, geo.coords)
+    searchRestaurantsAction(recommendation.menu, activeCoords)
       .then((result) => {
         if (!cancelled) setRestaurants(result);
       })
       .catch(() => {
-        if (!cancelled) setRestaurants([]); // Task 9의 빈 결과 fallback 경로
+        if (!cancelled) setRestaurants([]);
       })
       .finally(() => {
         if (!cancelled) setIsSearchingRestaurants(false);
@@ -74,9 +96,9 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [recommendation, geo]);
+  }, [recommendation, activeCoords]);
 
-  // 식당 도착 → 식당별 추정 메뉴(2차 LLM) 호출
+  // 식당 도착 → 추정 메뉴 (2차 LLM)
   useEffect(() => {
     if (!recommendation || !restaurants || restaurants.length === 0) return;
     let cancelled = false;
@@ -87,24 +109,22 @@ export default function Page() {
         for (const e of estimated) map[e.restaurantId] = e;
         setEstimatedMenus(map);
       })
-      .catch(() => {
-        // 실패해도 식당 카드는 유지. 추정 메뉴만 "로딩 중..." 자리에 남아 disclaimer는 그대로 표시됨.
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [recommendation, restaurants]);
 
-  const canSubmit = geo.status === "granted" && weather !== undefined && !isPending;
+  const canSubmit = activeCoords !== null && weather !== undefined && !isPending;
 
   const requestRecommendation = useCallback(() => {
-    if (geo.status !== "granted" || !weather) return;
+    if (!activeCoords || !activeRegionLabel || !weather) return;
     setDecideError(null);
     setRestaurants(null);
     startTransition(async () => {
       const context: RecommendationContext = {
-        coords: geo.coords,
-        regionLabel: "현재 위치",
+        coords: activeCoords,
+        regionLabel: activeRegionLabel,
         weather,
         timeOfDay,
         prompt: prompt.trim() ? prompt.trim() : undefined,
@@ -118,13 +138,29 @@ export default function Page() {
         setRecommendation(null);
       }
     });
-  }, [geo, weather, timeOfDay, prompt]);
+  }, [activeCoords, activeRegionLabel, weather, timeOfDay, prompt]);
 
   const reset = () => {
     setRecommendation(null);
     setDecideError(null);
     setRestaurants(null);
     setEstimatedMenus({});
+  };
+
+  const submitRegion = (regionName: string) => {
+    setIsResolvingRegion(true);
+    setRegionResolveError(null);
+    void resolveRegionAction(regionName)
+      .then((result) => {
+        if (result.ok) {
+          setResolvedRegion(result.region);
+        } else if (result.reason === "not_found") {
+          setRegionResolveError("지역을 찾을 수 없습니다. 다시 입력해 주세요");
+        } else {
+          setRegionResolveError("지역 검색에 실패했습니다. 잠시 후 다시 시도해 주세요");
+        }
+      })
+      .finally(() => setIsResolvingRegion(false));
   };
 
   if (decideError) {
@@ -166,9 +202,9 @@ export default function Page() {
                 ))}
               </div>
               <div className="md:col-span-2">
-                {geo.status === "granted" && (
+                {activeCoords && (
                   <div className="md:sticky md:top-6">
-                    <RestaurantMap restaurants={restaurants} center={geo.coords} />
+                    <RestaurantMap restaurants={restaurants} center={activeCoords} />
                   </div>
                 )}
               </div>
@@ -179,6 +215,8 @@ export default function Page() {
     );
   }
 
+  const locationDenied = geo.status === "denied" || geo.status === "unsupported";
+
   return (
     <main className="mx-auto min-h-screen max-w-2xl p-6">
       <div className="my-8 text-center">
@@ -188,11 +226,26 @@ export default function Page() {
         </p>
       </div>
 
+      {locationDenied ? (
+        <RegionInput
+          isSubmitting={isResolvingRegion}
+          errorMessage={regionResolveError ?? undefined}
+          resolvedLabel={resolvedRegion?.label}
+          onSubmit={submitRegion}
+        />
+      ) : null}
+
       <ContextDisplay
-        regionLabel={geo.status === "granted" ? "현재 위치" : undefined}
+        regionLabel={activeRegionLabel ?? undefined}
         weather={weather}
         timeOfDay={timeOfDay}
-        locationStatus={geo.status}
+        locationStatus={
+          geo.status === "granted"
+            ? "granted"
+            : resolvedRegion
+              ? "granted"
+              : geo.status
+        }
       />
 
       <div className="mb-6">
@@ -216,12 +269,6 @@ export default function Page() {
         <Sparkles className="size-4" />
         {isPending ? "추천하는 중..." : "추천받기"}
       </Button>
-
-      {(geo.status === "denied" || geo.status === "unsupported") && (
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          위치 정보를 사용할 수 없습니다 (수동 지역 입력은 Task 7에서 추가됩니다)
-        </p>
-      )}
     </main>
   );
 }

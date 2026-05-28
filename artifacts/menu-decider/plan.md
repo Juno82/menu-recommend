@@ -278,10 +278,10 @@
   - `components/menu-decider/region-input.tsx` (입력 칸 + 안내 + 에러)
   - `app/page.tsx` 업데이트 (Geolocation 거부 → region-input 노출)
 - **수용 기준**:
-  - [ ] 위치 권한 거부 상태에서 "위치 정보를 사용할 수 없어요. 지역을 입력해 주세요" 안내와 지역 입력 칸이 표시된다
-  - [ ] "강남역" 입력 + "추천받기" → 강남역 좌표 기반으로 메뉴 카드 + 식당 Top3가 표시된다
-  - [ ] 인식 불가한 지역명 입력 + "추천받기" → 입력 칸 아래 "지역을 찾을 수 없습니다. 다시 입력해 주세요" 메시지가 표시된다
-  - [ ] **위치 데이터 처리 코드 리뷰**: `services/kakao-geocoding-service.ts`가 데이터베이스 클라이언트/외부 저장소 쓰기 라이브러리를 import하지 않는다 (grep으로 확인)
+  - [x] 위치 권한 거부 상태에서 "위치 정보를 사용할 수 없어요. 지역을 입력해 주세요" 안내와 지역 입력 칸이 표시된다
+  - [x] "강남역" 입력 + "추천받기" → 강남역 좌표 기반으로 메뉴 카드 + 식당 Top3가 표시된다
+  - [x] 인식 불가한 지역명 입력 + "추천받기" → 입력 칸 아래 "지역을 찾을 수 없습니다. 다시 입력해 주세요" 메시지가 표시된다
+  - [x] **위치 데이터 처리 코드 리뷰**: `services/kakao-geocoding-service.ts`가 데이터베이스 클라이언트/외부 저장소 쓰기 라이브러리를 import하지 않는다 (grep으로 확인)
 - **검증**:
   - `bun run test services/kakao-geocoding-service.test.ts app/page.test.tsx`
   - Grep 체크: `grep -E "(prisma|drizzle|kysely|writeFile|redis|@vercel/kv)" services/kakao-geocoding-service.ts` → 매치 없음
