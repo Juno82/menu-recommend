@@ -1,8 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
-import { extractText, type LLMClient } from "@/lib/llm-client";
+import {
+  extractText,
+  type LLMClient,
+  type RetryOptions,
+  withGeminiRetry,
+} from "@/lib/llm-client";
 import type { EstimatedRestaurantMenu, Restaurant } from "@/types/menu-decider";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-2.5-flash-lite";
 const MAX_ITEMS_PER_RESTAURANT = 3;
 
 export type { LLMClient };
@@ -15,20 +20,25 @@ export type EstimatorInput = {
 export async function estimateRestaurantMenus(
   input: EstimatorInput,
   client?: LLMClient,
+  retryOptions?: RetryOptions,
 ): Promise<EstimatedRestaurantMenu[]> {
   if (input.restaurants.length === 0) return [];
 
   const sdk: LLMClient =
     client ?? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const response = await sdk.models.generateContent({
-    model: MODEL,
-    contents: buildUserPrompt(input),
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      responseMimeType: "application/json",
-    },
-  });
+  const response = await withGeminiRetry(
+    () =>
+      sdk.models.generateContent({
+        model: MODEL,
+        contents: buildUserPrompt(input),
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          responseMimeType: "application/json",
+        },
+      }),
+    retryOptions,
+  );
 
   const text = extractText(response);
   const parsed = parseEstimated(text);

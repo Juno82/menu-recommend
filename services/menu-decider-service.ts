@@ -1,9 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 import { MENU_POOL, isMenuInPool } from "@/config/menu-pool";
-import { extractText, type LLMClient } from "@/lib/llm-client";
+import {
+  extractText,
+  type LLMClient,
+  type RetryOptions,
+  withGeminiRetry,
+} from "@/lib/llm-client";
 import type { MenuRecommendation, RecommendationContext } from "@/types/menu-decider";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-2.5-flash-lite";
 
 export type { LLMClient };
 
@@ -31,18 +36,23 @@ export class LLMResponseParseError extends Error {
 export async function decideMenu(
   context: RecommendationContext,
   client?: LLMClient,
+  retryOptions?: RetryOptions,
 ): Promise<MenuRecommendation> {
   const sdk: LLMClient =
     client ?? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const response = await sdk.models.generateContent({
-    model: MODEL,
-    contents: buildUserPrompt(context),
-    config: {
-      systemInstruction: buildSystemPrompt(),
-      responseMimeType: "application/json",
-    },
-  });
+  const response = await withGeminiRetry(
+    () =>
+      sdk.models.generateContent({
+        model: MODEL,
+        contents: buildUserPrompt(context),
+        config: {
+          systemInstruction: buildSystemPrompt(),
+          responseMimeType: "application/json",
+        },
+      }),
+    retryOptions,
+  );
 
   const text = extractText(response);
   const recommendation = parseRecommendation(text);

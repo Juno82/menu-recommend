@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LLMRateLimitError, LLMUnavailableError } from "@/lib/llm-client";
 import type { RecommendationContext } from "@/types/menu-decider";
 import {
   ExcludedMenuViolationError,
@@ -90,5 +91,68 @@ describe("decideMenu", () => {
     };
     expect(call.config?.responseMimeType).toBe("application/json");
     expect(call.config?.systemInstruction).toContain("메뉴 목록");
+  });
+
+  it("throws LLMRateLimitError with retryAfterSeconds parsed from a 429 response", async () => {
+    const apiError = Object.assign(new Error('{"error":{"code":429,"details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"39s"}]}}'), {
+      status: 429,
+      message:
+        '{"error":{"code":429,"details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"39s"}]}}',
+    });
+    const client = {
+      models: { generateContent: vi.fn().mockRejectedValue(apiError) },
+    };
+    let caught: unknown;
+    try {
+      await decideMenu(baseContext, client as never, { sleep: async () => {} });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(LLMRateLimitError);
+    expect((caught as LLMRateLimitError).retryAfterSeconds).toBe(39);
+    expect(client.models.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries 503 errors and succeeds on the second attempt", async () => {
+    const apiError = Object.assign(new Error("503 unavailable"), {
+      status: 503,
+      message: "503 unavailable",
+    });
+    const client = {
+      models: {
+        generateContent: vi
+          .fn()
+          .mockRejectedValueOnce(apiError)
+          .mockResolvedValueOnce({
+            text: JSON.stringify({ menu: "칼국수", reason: "이유" }),
+          }),
+      },
+    };
+    const result = await decideMenu(baseContext, client as never, {
+      sleep: async () => {},
+    });
+    expect(result.menu).toBe("칼국수");
+    expect(client.models.generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws LLMUnavailableError after exhausting 503 retries", async () => {
+    const apiError = Object.assign(new Error("503 unavailable"), {
+      status: 503,
+      message: "503 unavailable",
+    });
+    const client = {
+      models: { generateContent: vi.fn().mockRejectedValue(apiError) },
+    };
+    let caught: unknown;
+    try {
+      await decideMenu(baseContext, client as never, {
+        max503Retries: 2,
+        sleep: async () => {},
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(LLMUnavailableError);
+    expect(client.models.generateContent).toHaveBeenCalledTimes(3);
   });
 });

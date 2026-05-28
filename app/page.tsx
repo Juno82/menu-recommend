@@ -2,7 +2,10 @@
 
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { decideMenuAction } from "@/app/actions/decide-menu";
+import {
+  decideMenuAction,
+  type DecideMenuFailureReason,
+} from "@/app/actions/decide-menu";
 import { estimateMenusAction } from "@/app/actions/estimate-menus";
 import { resolveRegionAction } from "@/app/actions/resolve-region";
 import { searchRestaurantsAction } from "@/app/actions/search-restaurants";
@@ -33,7 +36,10 @@ import type {
 export default function Page() {
   const [prompt, setPrompt] = useState("");
   const [recommendation, setRecommendation] = useState<MenuRecommendation | null>(null);
-  const [decideError, setDecideError] = useState<Error | null>(null);
+  const [decideError, setDecideError] = useState<{
+    reason: DecideMenuFailureReason;
+    retryAfterSeconds?: number;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const [restaurants, setRestaurants] = useState<Restaurant[] | null>(null);
@@ -143,10 +149,22 @@ export default function Page() {
       };
       try {
         const result = await decideMenuAction(context);
-        setRecommendation(result);
-        setViewedMenus((prev) => (prev.includes(result.menu) ? prev : [...prev, result.menu]));
-      } catch (err) {
-        setDecideError(err instanceof Error ? err : new Error(String(err)));
+        if (result.ok) {
+          setRecommendation(result.recommendation);
+          setViewedMenus((prev) =>
+            prev.includes(result.recommendation.menu)
+              ? prev
+              : [...prev, result.recommendation.menu],
+          );
+        } else {
+          setDecideError({
+            reason: result.reason,
+            retryAfterSeconds: result.retryAfterSeconds,
+          });
+          setRecommendation(null);
+        }
+      } catch {
+        setDecideError({ reason: "unknown" });
         setRecommendation(null);
       }
     });
@@ -179,7 +197,12 @@ export default function Page() {
   if (decideError) {
     return (
       <main className="mx-auto min-h-screen max-w-2xl p-6">
-        <RecommendationError onRetry={requestRecommendation} isRetrying={isPending} />
+        <RecommendationError
+          onRetry={requestRecommendation}
+          isRetrying={isPending}
+          errorType={decideError.reason}
+          retryAfterSeconds={decideError.retryAfterSeconds}
+        />
       </main>
     );
   }

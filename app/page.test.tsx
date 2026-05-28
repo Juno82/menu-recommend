@@ -1,8 +1,12 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Restaurant, Weather } from "@/types/menu-decider";
+import type { MenuRecommendation, Restaurant, Weather } from "@/types/menu-decider";
 import Page from "./page";
+
+const ok = (recommendation: MenuRecommendation) =>
+  ({ ok: true as const, recommendation });
+const failUnknown = () => ({ ok: false as const, reason: "unknown" as const });
 
 vi.mock("@/app/actions/decide-menu", () => ({
   decideMenuAction: vi.fn(),
@@ -94,10 +98,9 @@ async function waitForWeatherReady() {
 
 describe("Page — Task 1 (메뉴 결정 + 메뉴 카드)", () => {
   it("shows menu card with menu name and reason within 3 seconds after '추천받기'", async () => {
-    mockedDecide.mockResolvedValue({
-      menu: "칼국수",
-      reason: "비 오는 점심엔 따끈한 칼국수",
-    });
+    mockedDecide.mockResolvedValue(
+      ok({ menu: "칼국수", reason: "비 오는 점심엔 따끈한 칼국수" }),
+    );
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -112,7 +115,7 @@ describe("Page — Task 1 (메뉴 결정 + 메뉴 카드)", () => {
   });
 
   it("submits with empty prompt without validation error", async () => {
-    mockedDecide.mockResolvedValue({ menu: "된장찌개", reason: "쌀쌀한 점심엔 든든하게" });
+    mockedDecide.mockResolvedValue(ok({ menu: "된장찌개", reason: "쌀쌀한 점심엔 든든하게" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -125,7 +128,7 @@ describe("Page — Task 1 (메뉴 결정 + 메뉴 카드)", () => {
   });
 
   it("passes the prompt input value to the Server Action", async () => {
-    mockedDecide.mockResolvedValue({ menu: "샐러드", reason: "느끼함을 피해 가볍게" });
+    mockedDecide.mockResolvedValue(ok({ menu: "샐러드", reason: "느끼함을 피해 가볍게" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -139,7 +142,7 @@ describe("Page — Task 1 (메뉴 결정 + 메뉴 카드)", () => {
   });
 
   it("clicking '조건 다시 입력' clears the recommendation and shows the input form again", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "테스트 이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "테스트 이유" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -184,10 +187,9 @@ describe("Page — Task 2 (자동 수집)", () => {
   });
 
   it("menu card reason includes a weather or time-of-day cue (Scenario 2 success [3])", async () => {
-    mockedDecide.mockResolvedValue({
-      menu: "칼국수",
-      reason: "비 오는 점심엔 따끈한 칼국수 어때요",
-    });
+    mockedDecide.mockResolvedValue(
+      ok({ menu: "칼국수", reason: "비 오는 점심엔 따끈한 칼국수 어때요" }),
+    );
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -204,7 +206,7 @@ describe("Page — Task 2 (자동 수집)", () => {
 
 describe("Page — Task 3 (LLM 실패 처리)", () => {
   it("shows the error card and a '다시 시도' button when decideMenuAction rejects (Scenario 6)", async () => {
-    mockedDecide.mockRejectedValue(new Error("LLM unavailable"));
+    mockedDecide.mockResolvedValue(failUnknown());
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -219,7 +221,7 @@ describe("Page — Task 3 (LLM 실패 처리)", () => {
   });
 
   it("does not render the menu card area in the error state", async () => {
-    mockedDecide.mockRejectedValue(new Error("LLM unavailable"));
+    mockedDecide.mockResolvedValue(failUnknown());
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -230,10 +232,41 @@ describe("Page — Task 3 (LLM 실패 처리)", () => {
     expect(screen.queryByText("오늘의 메뉴")).not.toBeInTheDocument();
   });
 
+  it("shows the rate-limit message with retryAfterSeconds when decide returns rate_limit", async () => {
+    mockedDecide.mockResolvedValue({
+      ok: false,
+      reason: "rate_limit",
+      retryAfterSeconds: 39,
+    });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/지금은 추천이 어려워요/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/약 39초 뒤 다시 시도/)).toBeInTheDocument();
+  });
+
+  it("shows the unavailable message when decide returns unavailable", async () => {
+    mockedDecide.mockResolvedValue({ ok: false, reason: "unavailable" });
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Gemini가 일시적으로 혼잡합니다/)).toBeInTheDocument(),
+    );
+  });
+
   it("re-invokes decide-menu with the same prompt when '다시 시도' is clicked", async () => {
     mockedDecide
-      .mockRejectedValueOnce(new Error("first fail"))
-      .mockResolvedValueOnce({ menu: "칼국수", reason: "비 오는 점심엔 칼국수" });
+      .mockResolvedValueOnce(failUnknown())
+      .mockResolvedValueOnce(ok({ menu: "칼국수", reason: "비 오는 점심엔 칼국수" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -253,7 +286,7 @@ describe("Page — Task 3 (LLM 실패 처리)", () => {
 
 describe("Page — Task 4 (식당 검색 + 스켈레톤)", () => {
   it("shows restaurant skeletons after the menu card while restaurants are loading", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "비 오는 점심엔 칼국수" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "비 오는 점심엔 칼국수" }));
     let resolveSearch: (rs: Restaurant[]) => void = () => {};
     mockedSearch.mockReturnValue(
       new Promise<Restaurant[]>((r) => {
@@ -277,7 +310,7 @@ describe("Page — Task 4 (식당 검색 + 스켈레톤)", () => {
   });
 
   it("menu card appears before restaurant cards (Invariant: result order)", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "이유" }));
     let resolveSearch: (rs: Restaurant[]) => void = () => {};
     mockedSearch.mockReturnValue(
       new Promise<Restaurant[]>((r) => {
@@ -297,7 +330,7 @@ describe("Page — Task 4 (식당 검색 + 스켈레톤)", () => {
   });
 
   it("each restaurant card has name, walking distance, and a kakao link (target=_blank)", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "이유" }));
     mockedSearch.mockResolvedValue(sampleRestaurants);
     const user = userEvent.setup();
     render(<Page />);
@@ -319,7 +352,7 @@ describe("Page — Task 4 (식당 검색 + 스켈레톤)", () => {
 
 describe("Page — Task 5 (식당별 추정 메뉴 LLM)", () => {
   it("displays estimated menu items with priceWon after estimateMenusAction resolves", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "이유" }));
     mockedSearch.mockResolvedValue(sampleRestaurants);
     mockedEstimate.mockResolvedValue([
       {
@@ -352,7 +385,7 @@ describe("Page — Task 5 (식당별 추정 메뉴 LLM)", () => {
   });
 
   it("renders the disclaimer text on every restaurant card", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "이유" }));
     mockedSearch.mockResolvedValue(sampleRestaurants);
     mockedEstimate.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -369,7 +402,7 @@ describe("Page — Task 5 (식당별 추정 메뉴 LLM)", () => {
 
 describe("Page — Task 6 (카카오맵 지도)", () => {
   it("renders the map container alongside restaurant cards", async () => {
-    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "칼국수", reason: "이유" }));
     mockedSearch.mockResolvedValue(sampleRestaurants);
     const user = userEvent.setup();
     render(<Page />);
@@ -384,7 +417,7 @@ describe("Page — Task 6 (카카오맵 지도)", () => {
   });
 
   it("does not render the map when there are no restaurants", async () => {
-    mockedDecide.mockResolvedValue({ menu: "냉면", reason: "이유" });
+    mockedDecide.mockResolvedValue(ok({ menu: "냉면", reason: "이유" }));
     mockedSearch.mockResolvedValue([]);
     const user = userEvent.setup();
     render(<Page />);
@@ -454,8 +487,8 @@ describe("Page — Task 7 (위치 거부 fallback)", () => {
 describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
   it("passes previously viewed menus as excludedMenus on re-recommend", async () => {
     mockedDecide
-      .mockResolvedValueOnce({ menu: "칼국수", reason: "비 오는 점심" })
-      .mockResolvedValueOnce({ menu: "된장찌개", reason: "쌀쌀한 날 든든하게" });
+      .mockResolvedValueOnce(ok({ menu: "칼국수", reason: "비 오는 점심" }))
+      .mockResolvedValueOnce(ok({ menu: "된장찌개", reason: "쌀쌀한 날 든든하게" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -473,8 +506,8 @@ describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
 
   it("shows the new menu within 3 seconds of clicking 다시 추천", async () => {
     mockedDecide
-      .mockResolvedValueOnce({ menu: "칼국수", reason: "이유" })
-      .mockResolvedValueOnce({ menu: "된장찌개", reason: "다른 이유" });
+      .mockResolvedValueOnce(ok({ menu: "칼국수", reason: "이유" }))
+      .mockResolvedValueOnce(ok({ menu: "된장찌개", reason: "다른 이유" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -491,8 +524,8 @@ describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
 
   it("shows '새로 추천됨' badge from the second recommendation onward (not on the first)", async () => {
     mockedDecide
-      .mockResolvedValueOnce({ menu: "칼국수", reason: "이유 1" })
-      .mockResolvedValueOnce({ menu: "된장찌개", reason: "이유 2" });
+      .mockResolvedValueOnce(ok({ menu: "칼국수", reason: "이유 1" }))
+      .mockResolvedValueOnce(ok({ menu: "된장찌개", reason: "이유 2" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -508,8 +541,8 @@ describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
 
   it("renders previously viewed menus with strikethrough on the menu card", async () => {
     mockedDecide
-      .mockResolvedValueOnce({ menu: "칼국수", reason: "이유 1" })
-      .mockResolvedValueOnce({ menu: "된장찌개", reason: "이유 2" });
+      .mockResolvedValueOnce(ok({ menu: "칼국수", reason: "이유 1" }))
+      .mockResolvedValueOnce(ok({ menu: "된장찌개", reason: "이유 2" }));
     const user = userEvent.setup();
     render(<Page />);
     await waitForWeatherReady();
@@ -528,7 +561,7 @@ describe("Page — Task 8 (다시 추천 + 세션 제외)", () => {
 
 describe("Page — Task 9 (식당 없음 fallback)", () => {
   it("shows restaurant-empty fallback when searchRestaurants returns an empty array (Scenario 4)", async () => {
-    mockedDecide.mockResolvedValue({ menu: "평양냉면", reason: "더운 오후엔" });
+    mockedDecide.mockResolvedValue(ok({ menu: "평양냉면", reason: "더운 오후엔" }));
     mockedSearch.mockResolvedValue([]);
     const user = userEvent.setup();
     render(<Page />);
@@ -550,7 +583,7 @@ describe("Page — Task 9 (식당 없음 fallback)", () => {
   });
 
   it("shows restaurant-empty fallback when searchRestaurants rejects", async () => {
-    mockedDecide.mockResolvedValue({ menu: "평양냉면", reason: "더운 오후엔" });
+    mockedDecide.mockResolvedValue(ok({ menu: "평양냉면", reason: "더운 오후엔" }));
     mockedSearch.mockRejectedValue(new Error("kakao api failed"));
     const user = userEvent.setup();
     render(<Page />);
@@ -567,7 +600,7 @@ describe("Page — Task 9 (식당 없음 fallback)", () => {
   });
 
   it("keeps the menu card visible in the restaurant-empty state", async () => {
-    mockedDecide.mockResolvedValue({ menu: "평양냉면", reason: "더운 오후엔" });
+    mockedDecide.mockResolvedValue(ok({ menu: "평양냉면", reason: "더운 오후엔" }));
     mockedSearch.mockResolvedValue([]);
     const user = userEvent.setup();
     render(<Page />);
