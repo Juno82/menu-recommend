@@ -6,10 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 
 type Props = {
   menuName: string;
+  /** 카카오맵 외부 검색에 쓸 키워드. 미제공 시 menuName 사용. */
+  searchQuery?: string;
 };
 
-export function RestaurantEmpty({ menuName }: Props) {
-  const url = `https://map.kakao.com/?q=${encodeURIComponent(menuName)}`;
+export function RestaurantEmpty({ menuName, searchQuery }: Props) {
+  const effectiveQuery = searchQuery ?? menuName;
+  const url = `https://map.kakao.com/?q=${encodeURIComponent(effectiveQuery)}`;
   return (
     <Card className="mx-auto max-w-2xl">
       <CardContent className="p-6 text-center">
@@ -23,7 +26,7 @@ export function RestaurantEmpty({ menuName }: Props) {
         <Button asChild>
           <a href={url} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="size-4" />
-            카카오맵에서 &quot;{menuName}&quot; 검색
+            카카오맵에서 &quot;{effectiveQuery}&quot; 검색
           </a>
         </Button>
       </CardContent>

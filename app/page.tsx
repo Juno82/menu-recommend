@@ -88,7 +88,10 @@ export default function Page() {
     setRestaurants(null);
     setEstimatedMenus({});
     setIsSearchingRestaurants(true);
-    searchRestaurantsAction(recommendation.menu, activeCoords)
+    searchRestaurantsAction(
+      recommendation.searchQuery ?? recommendation.menu,
+      activeCoords,
+    )
       .then((result) => {
         if (!cancelled) setRestaurants(result);
       })
@@ -226,7 +229,10 @@ export default function Page() {
               </div>
             </div>
           ) : restaurants && restaurants.length === 0 ? (
-            <RestaurantEmpty menuName={recommendation.menu} />
+            <RestaurantEmpty
+              menuName={recommendation.menu}
+              searchQuery={recommendation.searchQuery}
+            />
           ) : null}
         </section>
       </main>

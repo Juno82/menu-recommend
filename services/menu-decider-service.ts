@@ -69,12 +69,20 @@ function buildSystemPrompt(): string {
 ${list}
 
 응답 형식 (JSON 객체, 다른 텍스트 없음):
-{ "menu": "<목록에서 고른 메뉴명 그대로>", "reason": "<한 줄 추천 이유 — 날씨 또는 시간대 단서를 자연어로 포함>" }
+{
+  "menu": "<목록에서 고른 메뉴명 그대로>",
+  "reason": "<한 줄 추천 이유 — 날씨 또는 시간대 단서를 자연어로 포함>",
+  "searchQuery": "<카카오맵에서 그 메뉴를 파는 식당을 찾기 위한 한국어 키워드>"
+}
 
 규칙:
 - menu는 반드시 위 목록의 메뉴명과 정확히 동일해야 합니다 (목록에 없는 메뉴는 절대 만들지 마세요).
 - 사용자가 제외 요청한 메뉴는 절대 선택하지 마세요.
-- reason은 한 문장, 50자 이내, 따뜻한 어투로 작성하고 날씨나 시간대 단서를 한 단어라도 자연스럽게 포함하세요.`;
+- reason은 한 문장, 50자 이내, 따뜻한 어투로 작성하고 날씨나 시간대 단서를 한 단어라도 자연스럽게 포함하세요.
+- searchQuery는 한국 사람이 카카오맵에서 그런 종류 식당을 찾을 때 흔히 입력하는 키워드를 고르세요.
+  - 식당 간판/이름에 메뉴명이 자주 들어가면 menu 그대로 사용 (예: "칼국수" → "칼국수", "삼겹살" → "삼겹살").
+  - 간판에 잘 안 들어가는 메뉴는 카테고리 단어 (예: "잔치국수" → "국수", "라면" → "분식", "간짜장" → "중식", "평양냉면" → "냉면", "오므라이스" → "경양식", "사케동" → "회덮밥", "토마토파스타" → "파스타", "들깨칼국수" → "칼국수", "산채비빔밥" → "비빔밥", "황태해장국" → "해장국", "굴짬뽕" → "짬뽕", "마라샹궈" → "마라", "후라이드" → "치킨").
+  - 가장 일반적인 1-2 단어로 짧게.`;
 }
 
 function buildUserPrompt(context: RecommendationContext): string {
@@ -113,8 +121,15 @@ function parseRecommendation(text: string): MenuRecommendation {
   ) {
     throw new LLMResponseParseError("LLM response missing menu or reason");
   }
+  const obj = parsed as { menu: string; reason: string; searchQuery?: unknown };
+  // searchQuery 누락/공백 시 menu로 fallback — UI는 영향 없고 검색은 메뉴명으로 시도
+  const searchQuery =
+    typeof obj.searchQuery === "string" && obj.searchQuery.trim().length > 0
+      ? obj.searchQuery.trim()
+      : obj.menu;
   return {
-    menu: (parsed as { menu: string }).menu,
-    reason: (parsed as { reason: string }).reason,
+    menu: obj.menu,
+    reason: obj.reason,
+    searchQuery,
   };
 }
