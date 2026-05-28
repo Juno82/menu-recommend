@@ -22,10 +22,8 @@ function mockClient(response: MockResponse | string) {
       ? response
       : JSON.stringify({ menu: response.menu, reason: response.reason ?? "테스트 이유" });
   return {
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text }],
-      }),
+    models: {
+      generateContent: vi.fn().mockResolvedValue({ text }),
     },
   };
 }
@@ -56,13 +54,10 @@ describe("decideMenu", () => {
   it("includes weather, temperature and time-of-day in the user prompt", async () => {
     const client = mockClient({ menu: "된장찌개" });
     await decideMenu(baseContext, client as never);
-    const call = client.messages.create.mock.calls[0]?.[0] as {
-      messages: { content: string }[];
-    };
-    const userMessage = call.messages[0].content;
-    expect(userMessage).toContain("흐림");
-    expect(userMessage).toContain("18");
-    expect(userMessage).toContain("점심");
+    const call = client.models.generateContent.mock.calls[0]?.[0] as { contents: string };
+    expect(call.contents).toContain("흐림");
+    expect(call.contents).toContain("18");
+    expect(call.contents).toContain("점심");
   });
 
   it("includes the user prompt in the message when provided", async () => {
@@ -71,10 +66,8 @@ describe("decideMenu", () => {
       { ...baseContext, prompt: "느끼한 거 빼고" },
       client as never,
     );
-    const call = client.messages.create.mock.calls[0]?.[0] as {
-      messages: { content: string }[];
-    };
-    expect(call.messages[0].content).toContain("느끼한 거 빼고");
+    const call = client.models.generateContent.mock.calls[0]?.[0] as { contents: string };
+    expect(call.contents).toContain("느끼한 거 빼고");
   });
 
   it("includes excluded menus and an exclusion hint in the user prompt", async () => {
@@ -83,22 +76,19 @@ describe("decideMenu", () => {
       { ...baseContext, excludedMenus: ["칼국수", "라면"] },
       client as never,
     );
-    const call = client.messages.create.mock.calls[0]?.[0] as {
-      messages: { content: string }[];
-    };
-    const userMessage = call.messages[0].content;
-    expect(userMessage).toContain("칼국수");
-    expect(userMessage).toContain("라면");
-    expect(userMessage).toContain("제외");
+    const call = client.models.generateContent.mock.calls[0]?.[0] as { contents: string };
+    expect(call.contents).toContain("칼국수");
+    expect(call.contents).toContain("라면");
+    expect(call.contents).toContain("제외");
   });
 
-  it("uses ephemeral prompt caching on the menu pool system block", async () => {
+  it("requests JSON response mime type with the menu pool as system instruction", async () => {
     const client = mockClient({ menu: "칼국수" });
     await decideMenu(baseContext, client as never);
-    const call = client.messages.create.mock.calls[0]?.[0] as {
-      system?: { type: string; text: string; cache_control?: { type: string } }[];
+    const call = client.models.generateContent.mock.calls[0]?.[0] as {
+      config?: { systemInstruction?: string; responseMimeType?: string };
     };
-    expect(call.system).toBeDefined();
-    expect(call.system?.[0].cache_control?.type).toBe("ephemeral");
+    expect(call.config?.responseMimeType).toBe("application/json");
+    expect(call.config?.systemInstruction).toContain("메뉴 목록");
   });
 });

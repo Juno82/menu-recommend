@@ -23,10 +23,8 @@ const restaurants: Restaurant[] = [
 
 function mockClient(jsonText: string) {
   return {
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: jsonText }],
-      }),
+    models: {
+      generateContent: vi.fn().mockResolvedValue({ text: jsonText }),
     },
   };
 }
@@ -67,7 +65,7 @@ describe("estimateRestaurantMenus", () => {
       client as never,
     );
     expect(result).toEqual([]);
-    expect(client.messages.create).not.toHaveBeenCalled();
+    expect(client.models.generateContent).not.toHaveBeenCalled();
   });
 
   it("includes restaurant id, name, and category in the user prompt", async () => {
@@ -76,15 +74,12 @@ describe("estimateRestaurantMenus", () => {
       { menu: "칼국수", restaurants },
       client as never,
     );
-    const call = client.messages.create.mock.calls[0]?.[0] as {
-      messages: { content: string }[];
-    };
-    const userMessage = call.messages[0].content;
-    expect(userMessage).toContain("김씨네 칼국수");
-    expect(userMessage).toContain("손칼국수 명가");
-    expect(userMessage).toContain("한식 · 칼국수");
-    expect(userMessage).toContain("id: 1");
-    expect(userMessage).toContain("id: 2");
+    const call = client.models.generateContent.mock.calls[0]?.[0] as { contents: string };
+    expect(call.contents).toContain("김씨네 칼국수");
+    expect(call.contents).toContain("손칼국수 명가");
+    expect(call.contents).toContain("한식 · 칼국수");
+    expect(call.contents).toContain("id: 1");
+    expect(call.contents).toContain("id: 2");
   });
 
   it("clamps items to at most 3 per restaurant", async () => {
@@ -105,5 +100,19 @@ describe("estimateRestaurantMenus", () => {
       client as never,
     );
     expect(result[0]?.items).toHaveLength(3);
+  });
+
+  it("drops entries whose restaurantId is not in the input list (LLM hallucination guard)", async () => {
+    const responseJson = JSON.stringify([
+      { restaurantId: "1", items: [{ name: "메뉴1", priceWon: "9,000원" }] },
+      { restaurantId: "999", items: [{ name: "유령식당메뉴", priceWon: "0원" }] },
+    ]);
+    const client = mockClient(responseJson);
+    const result = await estimateRestaurantMenus(
+      { menu: "칼국수", restaurants },
+      client as never,
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]?.restaurantId).toBe("1");
   });
 });

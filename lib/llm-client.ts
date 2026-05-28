@@ -1,21 +1,27 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { GenerateContentConfig, GoogleGenAI } from "@google/genai";
 
-export type LLMClient = {
-  messages: Pick<Anthropic["messages"], "create">;
+export type GenerateContentParams = {
+  model: string;
+  contents: string;
+  config?: GenerateContentConfig;
 };
 
-type MessagesResponse = Awaited<ReturnType<Anthropic["messages"]["create"]>>;
+export type GenerateContentResult = {
+  text?: string;
+};
 
-export function extractText(response: MessagesResponse | { content: unknown[] }): string {
-  const blocks = (response as { content: unknown[] }).content;
-  return blocks
-    .filter(
-      (block): block is { type: "text"; text: string } =>
-        typeof block === "object" &&
-        block !== null &&
-        (block as { type?: string }).type === "text" &&
-        typeof (block as { text?: unknown }).text === "string",
-    )
-    .map((block) => block.text)
-    .join("");
+export type LLMClient = {
+  models: {
+    generateContent: (params: GenerateContentParams) => Promise<GenerateContentResult>;
+  };
+};
+
+/**
+ * @google/genai의 `GoogleGenAI` 인스턴스는 우리 `LLMClient` 인터페이스를 만족한다.
+ * Mock에서는 같은 모양의 객체로 대체한다.
+ */
+export type AnyLLMClient = LLMClient | GoogleGenAI;
+
+export function extractText(response: GenerateContentResult): string {
+  return typeof response.text === "string" ? response.text : "";
 }

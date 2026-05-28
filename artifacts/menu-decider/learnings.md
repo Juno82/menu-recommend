@@ -42,6 +42,16 @@ applied: rule
 category: refactor
 applied: rule
 ---
+## LLM 제공자 swap (Anthropic → Gemini)이 추상화 덕분에 ~10분 만에 완료
+
+**상황**: Step 5 후 사용자 요청으로 LLM 제공자를 Anthropic Claude → Google Gemini로 전환. SDK·환경변수·모델명·테스트 mock 형태 모두 달라짐.
+**판단**: `lib/llm-client.ts` 추상화(LLMClient 타입 + extractText)가 이미 추출돼 있어 두 service + 두 service 테스트만 바꿈. `app/page.tsx`나 다른 레이어는 무변경. mock 형태도 `messages.create({ content: [{ type, text }] })` → `models.generateContent({ text })`로 더 단순화됨.
+**다시 마주칠 가능성**: 중간 — 외부 SDK 변경/공급자 전환은 자주 발생. **일반화 규칙**: 외부 SDK는 항상 `lib/<provider>-client.ts` 같은 얇은 추상화 레이어를 거쳐서 쓴다. SDK 타입을 service 안에 직접 노출하지 않는다.
+
+---
+category: refactor
+applied: rule
+---
 ## LLM 호출 패턴 중복 → lib/llm-client.ts 추출 (code-reviewer S-1 채택)
 
 **상황**: Task 1과 Task 5에서 `LLMClient` 타입, `extractText`, `MessagesResponse` alias가 두 서비스에 복제. code-reviewer가 S-1으로 다시 지적해 패턴 인식 임계점 도달.

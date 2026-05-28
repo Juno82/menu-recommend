@@ -1,9 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { extractText, type LLMClient } from "@/lib/llm-client";
 import type { EstimatedRestaurantMenu, Restaurant } from "@/types/menu-decider";
 
-const MODEL = "claude-haiku-4-5-20251001";
-const MAX_TOKENS = 1024;
+const MODEL = "gemini-2.5-flash";
 const MAX_ITEMS_PER_RESTAURANT = 3;
 
 export type { LLMClient };
@@ -19,12 +18,16 @@ export async function estimateRestaurantMenus(
 ): Promise<EstimatedRestaurantMenu[]> {
   if (input.restaurants.length === 0) return [];
 
-  const sdk: LLMClient = client ?? new Anthropic();
-  const response = await sdk.messages.create({
+  const sdk: LLMClient =
+    client ?? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+  const response = await sdk.models.generateContent({
     model: MODEL,
-    max_tokens: MAX_TOKENS,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: buildUserPrompt(input) }],
+    contents: buildUserPrompt(input),
+    config: {
+      systemInstruction: SYSTEM_PROMPT,
+      responseMimeType: "application/json",
+    },
   });
 
   const text = extractText(response);
@@ -83,18 +86,17 @@ function parseEstimated(text: string): ParsedEntry[] {
     throw new Error("Estimator response is not an array");
   }
 
-  return parsed
-    .filter((entry): entry is ParsedEntry => {
-      if (typeof entry !== "object" || entry === null) return false;
-      const e = entry as { restaurantId?: unknown; items?: unknown };
-      if (typeof e.restaurantId !== "string") return false;
-      if (!Array.isArray(e.items)) return false;
-      return e.items.every(
-        (item: unknown) =>
-          typeof item === "object" &&
-          item !== null &&
-          typeof (item as { name?: unknown }).name === "string" &&
-          typeof (item as { priceWon?: unknown }).priceWon === "string",
-      );
-    });
+  return parsed.filter((entry): entry is ParsedEntry => {
+    if (typeof entry !== "object" || entry === null) return false;
+    const e = entry as { restaurantId?: unknown; items?: unknown };
+    if (typeof e.restaurantId !== "string") return false;
+    if (!Array.isArray(e.items)) return false;
+    return e.items.every(
+      (item: unknown) =>
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as { name?: unknown }).name === "string" &&
+        typeof (item as { priceWon?: unknown }).priceWon === "string",
+    );
+  });
 }

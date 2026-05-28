@@ -1,10 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import { MENU_POOL, isMenuInPool } from "@/config/menu-pool";
 import { extractText, type LLMClient } from "@/lib/llm-client";
 import type { MenuRecommendation, RecommendationContext } from "@/types/menu-decider";
 
-const MODEL = "claude-haiku-4-5-20251001";
-const MAX_TOKENS = 256;
+const MODEL = "gemini-2.5-flash";
 
 export type { LLMClient };
 
@@ -33,19 +32,16 @@ export async function decideMenu(
   context: RecommendationContext,
   client?: LLMClient,
 ): Promise<MenuRecommendation> {
-  const sdk: LLMClient = client ?? new Anthropic();
+  const sdk: LLMClient =
+    client ?? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const response = await sdk.messages.create({
+  const response = await sdk.models.generateContent({
     model: MODEL,
-    max_tokens: MAX_TOKENS,
-    system: [
-      {
-        type: "text",
-        text: buildSystemPrompt(),
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: buildUserPrompt(context) }],
+    contents: buildUserPrompt(context),
+    config: {
+      systemInstruction: buildSystemPrompt(),
+      responseMimeType: "application/json",
+    },
   });
 
   const text = extractText(response);
@@ -72,7 +68,7 @@ function buildSystemPrompt(): string {
 [메뉴 목록]
 ${list}
 
-응답 형식 (JSON만, 다른 텍스트 없음):
+응답 형식 (JSON 객체, 다른 텍스트 없음):
 { "menu": "<목록에서 고른 메뉴명 그대로>", "reason": "<한 줄 추천 이유 — 날씨 또는 시간대 단서를 자연어로 포함>" }
 
 규칙:

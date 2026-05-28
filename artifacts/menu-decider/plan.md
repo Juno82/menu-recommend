@@ -4,7 +4,7 @@
 
 | 결정 | 선택 | 이유 |
 |---|---|---|
-| LLM 제공자 | Anthropic Claude | claude-api 스킬 정합, 한국어 자연 생성 품질, prompt caching으로 메뉴 풀 캐싱 가능 |
+| LLM 제공자 | Google Gemini (`gemini-2.5-flash`, `@google/genai`) | 사용자 선호로 Anthropic → Gemini 전환 (Step 5 후). `lib/llm-client.ts` 추상화 덕에 두 service만 swap, 테스트 mock 형태도 단순(`{ text }`)해짐 |
 | LLM 호출 구조 | 두 단계 분리 (메뉴 결정 + 식당별 추정 메뉴) | 불변규칙 "메뉴 카드가 식당보다 먼저 표시" 자연스럽게 충족, 인지 응답 시간 단축 |
 | 메뉴 후보 풀 | 사전 정의 한국 메뉴 ~150개 (`config/menu-pool.ts`), LLM은 풀에서 선택만 | hallucination 방지, "이전 메뉴 제외"(S5)가 단순한 set 연산, 평가/디버깅 용이 |
 | LLM 호출 위치 | Server Action | ANTHROPIC_API_KEY 보호, Next.js 16 App Router 표준 폼 통합 |
@@ -19,7 +19,7 @@
 
 | 리소스 | 유형 | 선언 위치 | 생성 Task |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Env var (서버 전용) | `.env.local` + `.env.example` | Task 1 |
+| `GEMINI_API_KEY` | Env var (서버 전용) | `.env.local` + `.env.example` | Task 1 |
 | `KAKAO_REST_API_KEY` | Env var (서버 전용) | `.env.local` + `.env.example` | Task 4 |
 | `NEXT_PUBLIC_KAKAO_JS_KEY` | Env var (클라이언트 노출 허용, 도메인 화이트리스트 보호) | `.env.local` + `.env.example` | Task 6 |
 
@@ -362,7 +362,7 @@
 
 ## 미결정 항목
 
-- **Anthropic 모델 선택** — `claude-haiku-4-5` (응답 빠름, 비용 ↓) vs `claude-sonnet-4-6`. Task 1 첫 측정 후 결정 (불변규칙 응답 시간 3초 충족 기준)
+- **Gemini 모델 선택** — `gemini-2.5-flash`로 시작. 응답 시간/품질 미흡 시 `gemini-2.5-pro` 검토
 - **식당 검색 반경** — 카카오 로컬 API `radius` 파라미터 기본값. Task 4에서 1000m(=도보 약 13분)로 시작, 도보 거리 표시가 자연스럽지 않으면 조정
 - **메뉴 풀 큐레이션 분포** — Task 1에서 ~150개 정의 시 카테고리(한식/중식/일식/양식/분식/면/찌개/구이/국밥/해산물/디저트 등) 비율. 첫 정의 후 본인 테스트로 다양성 부족 시 보강
 - **식당 카드/지도 표시 인내선 정량** — spec.md 미결정. Checkpoint 1 측정 후 결정
