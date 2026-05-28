@@ -227,8 +227,8 @@
   - `app/actions/estimate-menus.ts` (Server Action)
   - `components/menu-decider/restaurant-card.tsx` 업데이트 (placeholder → 진짜 추정 메뉴 1-3개 + 가격 + disclaimer 영구 표시)
 - **수용 기준**:
-  - [ ] 식당 카드의 추정 메뉴 1-3개가 메뉴명과 가격(예: "9,000원") 형식으로 표시된다
-  - [ ] 모든 식당 카드 하단에 "메뉴·가격은 AI 추정값입니다. 실제는 가게에서 확인해 주세요" 텍스트가 표시되고 DOM에 영구 노드로 존재 (닫기 버튼 없음)
+  - [x] 식당 카드의 추정 메뉴 1-3개가 메뉴명과 가격(예: "9,000원") 형식으로 표시된다
+  - [x] 모든 식당 카드 하단에 "메뉴·가격은 AI 추정값입니다. 실제는 가게에서 확인해 주세요" 텍스트가 표시되고 DOM에 영구 노드로 존재 (닫기 버튼 없음)
 - **검증**:
   - `bun run test services/restaurant-menu-estimator-service.test.ts`
   - `bun run test components/menu-decider/restaurant-card.test.tsx` (disclaimer DOM 존재 단언)

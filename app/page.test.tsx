@@ -10,6 +10,9 @@ vi.mock("@/app/actions/decide-menu", () => ({
 vi.mock("@/app/actions/search-restaurants", () => ({
   searchRestaurantsAction: vi.fn(),
 }));
+vi.mock("@/app/actions/estimate-menus", () => ({
+  estimateMenusAction: vi.fn(),
+}));
 vi.mock("@/hooks/use-geolocation", () => ({
   useGeolocation: vi.fn(),
 }));
@@ -22,12 +25,14 @@ vi.mock("@/lib/time-of-day", () => ({
 
 const { decideMenuAction } = await import("@/app/actions/decide-menu");
 const { searchRestaurantsAction } = await import("@/app/actions/search-restaurants");
+const { estimateMenusAction } = await import("@/app/actions/estimate-menus");
 const { useGeolocation } = await import("@/hooks/use-geolocation");
 const { fetchWeather } = await import("@/lib/weather");
 const { getTimeOfDay } = await import("@/lib/time-of-day");
 
 const mockedDecide = vi.mocked(decideMenuAction);
 const mockedSearch = vi.mocked(searchRestaurantsAction);
+const mockedEstimate = vi.mocked(estimateMenusAction);
 const mockedGeo = vi.mocked(useGeolocation);
 const mockedWeather = vi.mocked(fetchWeather);
 const mockedTimeOfDay = vi.mocked(getTimeOfDay);
@@ -35,6 +40,7 @@ const mockedTimeOfDay = vi.mocked(getTimeOfDay);
 beforeEach(() => {
   mockedDecide.mockReset();
   mockedSearch.mockReset();
+  mockedEstimate.mockReset();
   mockedGeo.mockReset();
   mockedWeather.mockReset();
   mockedTimeOfDay.mockReset();
@@ -46,6 +52,7 @@ beforeEach(() => {
   mockedWeather.mockResolvedValue({ condition: "흐림", tempC: 18 });
   mockedTimeOfDay.mockReturnValue("점심");
   mockedSearch.mockResolvedValue([]);
+  mockedEstimate.mockResolvedValue([]);
 });
 
 const sampleRestaurants: Restaurant[] = [
@@ -301,5 +308,55 @@ describe("Page — Task 4 (식당 검색 + 스켈레톤)", () => {
     expect(links).toHaveLength(3);
     expect(links[0]).toHaveAttribute("target", "_blank");
     expect(links[0]).toHaveAttribute("href", "https://place.map.kakao.com/1");
+  });
+});
+
+describe("Page — Task 5 (식당별 추정 메뉴 LLM)", () => {
+  it("displays estimated menu items with priceWon after estimateMenusAction resolves", async () => {
+    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedSearch.mockResolvedValue(sampleRestaurants);
+    mockedEstimate.mockResolvedValue([
+      {
+        restaurantId: "1",
+        items: [
+          { name: "해물칼국수", priceWon: "9,000원" },
+          { name: "들깨칼국수", priceWon: "8,500원" },
+        ],
+      },
+      {
+        restaurantId: "2",
+        items: [{ name: "사골칼국수", priceWon: "11,000원" }],
+      },
+      {
+        restaurantId: "3",
+        items: [{ name: "잔치국수", priceWon: "7,500원" }],
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("해물칼국수"));
+
+    expect(screen.getByText("9,000원")).toBeInTheDocument();
+    expect(screen.getByText("들깨칼국수")).toBeInTheDocument();
+    expect(screen.getByText("사골칼국수")).toBeInTheDocument();
+    expect(screen.getByText("11,000원")).toBeInTheDocument();
+  });
+
+  it("renders the disclaimer text on every restaurant card", async () => {
+    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedSearch.mockResolvedValue(sampleRestaurants);
+    mockedEstimate.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("김씨네 칼국수"));
+
+    const disclaimers = screen.getAllByText(/AI 추정값입니다.+가게에서 확인/);
+    expect(disclaimers).toHaveLength(3);
   });
 });

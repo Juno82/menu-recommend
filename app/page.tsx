@@ -3,6 +3,7 @@
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { decideMenuAction } from "@/app/actions/decide-menu";
+import { estimateMenusAction } from "@/app/actions/estimate-menus";
 import { searchRestaurantsAction } from "@/app/actions/search-restaurants";
 import { ContextDisplay } from "@/components/menu-decider/context-display";
 import { MenuCard } from "@/components/menu-decider/menu-card";
@@ -16,6 +17,7 @@ import { useGeolocation } from "@/hooks/use-geolocation";
 import { getTimeOfDay } from "@/lib/time-of-day";
 import { fetchWeather } from "@/lib/weather";
 import type {
+  EstimatedRestaurantMenu,
   MenuRecommendation,
   RecommendationContext,
   Restaurant,
@@ -30,6 +32,7 @@ export default function Page() {
 
   const [restaurants, setRestaurants] = useState<Restaurant[] | null>(null);
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
+  const [estimatedMenus, setEstimatedMenus] = useState<Record<string, EstimatedRestaurantMenu>>({});
 
   const geo = useGeolocation();
   const [weather, setWeather] = useState<Weather | undefined>(undefined);
@@ -55,6 +58,7 @@ export default function Page() {
     if (!recommendation || geo.status !== "granted") return;
     let cancelled = false;
     setRestaurants(null);
+    setEstimatedMenus({});
     setIsSearchingRestaurants(true);
     searchRestaurantsAction(recommendation.menu, geo.coords)
       .then((result) => {
@@ -70,6 +74,25 @@ export default function Page() {
       cancelled = true;
     };
   }, [recommendation, geo]);
+
+  // 식당 도착 → 식당별 추정 메뉴(2차 LLM) 호출
+  useEffect(() => {
+    if (!recommendation || !restaurants || restaurants.length === 0) return;
+    let cancelled = false;
+    estimateMenusAction(recommendation.menu, restaurants)
+      .then((estimated) => {
+        if (cancelled) return;
+        const map: Record<string, EstimatedRestaurantMenu> = {};
+        for (const e of estimated) map[e.restaurantId] = e;
+        setEstimatedMenus(map);
+      })
+      .catch(() => {
+        // 실패해도 식당 카드는 유지. 추정 메뉴만 "로딩 중..." 자리에 남아 disclaimer는 그대로 표시됨.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [recommendation, restaurants]);
 
   const canSubmit = geo.status === "granted" && weather !== undefined && !isPending;
 
@@ -100,6 +123,7 @@ export default function Page() {
     setRecommendation(null);
     setDecideError(null);
     setRestaurants(null);
+    setEstimatedMenus({});
   };
 
   if (decideError) {
@@ -131,7 +155,12 @@ export default function Page() {
           ) : restaurants && restaurants.length > 0 ? (
             <div className="space-y-3">
               {restaurants.map((r, idx) => (
-                <RestaurantCard key={r.id} restaurant={r} pinNumber={idx + 1} />
+                <RestaurantCard
+                  key={r.id}
+                  restaurant={r}
+                  pinNumber={idx + 1}
+                  estimatedMenu={estimatedMenus[r.id]}
+                />
               ))}
             </div>
           ) : null}
