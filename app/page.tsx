@@ -6,7 +6,7 @@ import {
   decideMenuAction,
   type DecideMenuFailureReason,
 } from "@/app/actions/decide-menu";
-import { estimateMenusAction } from "@/app/actions/estimate-menus";
+import { fetchRestaurantMenusAction } from "@/app/actions/fetch-restaurant-menus";
 import { resolveRegionAction } from "@/app/actions/resolve-region";
 import { searchRestaurantsAction } from "@/app/actions/search-restaurants";
 import { ContextDisplay } from "@/components/menu-decider/context-display";
@@ -26,10 +26,10 @@ import { fetchWeather } from "@/lib/weather";
 import type { ResolvedRegion } from "@/services/kakao-geocoding-service";
 import type {
   Coords,
-  EstimatedRestaurantMenu,
   MenuRecommendation,
   RecommendationContext,
   Restaurant,
+  RestaurantMenu,
   Weather,
 } from "@/types/menu-decider";
 
@@ -44,8 +44,9 @@ export default function Page() {
 
   const [restaurants, setRestaurants] = useState<Restaurant[] | null>(null);
   const [isSearchingRestaurants, setIsSearchingRestaurants] = useState(false);
-  const [estimatedMenus, setEstimatedMenus] = useState<Record<string, EstimatedRestaurantMenu>>({});
-  const [estimateError, setEstimateError] = useState(false);
+  const [restaurantMenus, setRestaurantMenus] = useState<Record<string, RestaurantMenu>>({});
+  const [menusLoaded, setMenusLoaded] = useState(false);
+  const [menuFetchError, setMenuFetchError] = useState(false);
   const [viewedMenus, setViewedMenus] = useState<string[]>([]);
 
   const geo = useGeolocation();
@@ -92,7 +93,8 @@ export default function Page() {
     if (!recommendation || !activeCoords) return;
     let cancelled = false;
     setRestaurants(null);
-    setEstimatedMenus({});
+    setRestaurantMenus({});
+    setMenusLoaded(false);
     setIsSearchingRestaurants(true);
     searchRestaurantsAction(
       recommendation.searchQuery ?? recommendation.menu,
@@ -112,25 +114,29 @@ export default function Page() {
     };
   }, [recommendation, activeCoords]);
 
-  // 식당 도착 → 추정 메뉴 (2차 LLM)
+  // 식당 도착 → 카카오 place에서 실제 메뉴/가격 조회
   useEffect(() => {
-    if (!recommendation || !restaurants || restaurants.length === 0) return;
+    if (!restaurants || restaurants.length === 0) return;
     let cancelled = false;
-    setEstimateError(false);
-    estimateMenusAction(recommendation.menu, restaurants)
-      .then((estimated) => {
+    setMenuFetchError(false);
+    setMenusLoaded(false);
+    fetchRestaurantMenusAction(restaurants)
+      .then((menus) => {
         if (cancelled) return;
-        const map: Record<string, EstimatedRestaurantMenu> = {};
-        for (const e of estimated) map[e.restaurantId] = e;
-        setEstimatedMenus(map);
+        const map: Record<string, RestaurantMenu> = {};
+        for (const m of menus) map[m.restaurantId] = m;
+        setRestaurantMenus(map);
       })
       .catch(() => {
-        if (!cancelled) setEstimateError(true);
+        if (!cancelled) setMenuFetchError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setMenusLoaded(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [recommendation, restaurants]);
+  }, [restaurants]);
 
   const canSubmit = activeCoords !== null && weather !== undefined && !isPending;
 
@@ -174,7 +180,8 @@ export default function Page() {
     setRecommendation(null);
     setDecideError(null);
     setRestaurants(null);
-    setEstimatedMenus({});
+    setRestaurantMenus({});
+    setMenusLoaded(false);
     setViewedMenus([]);
   };
 
@@ -229,9 +236,9 @@ export default function Page() {
           ) : restaurants && restaurants.length > 0 ? (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
               <div className="space-y-3 md:col-span-3">
-                {estimateError && (
+                {menuFetchError && (
                   <p className="text-xs text-muted-foreground">
-                    추정 메뉴 정보를 가져오지 못했습니다. 가게에서 직접 확인해 주세요.
+                    메뉴 정보를 가져오지 못했습니다. 가게에서 직접 확인해 주세요.
                   </p>
                 )}
                 {restaurants.map((r, idx) => (
@@ -239,7 +246,8 @@ export default function Page() {
                     key={r.id}
                     restaurant={r}
                     pinNumber={idx + 1}
-                    estimatedMenu={estimatedMenus[r.id]}
+                    menu={restaurantMenus[r.id]}
+                    menuLoaded={menusLoaded}
                   />
                 ))}
               </div>

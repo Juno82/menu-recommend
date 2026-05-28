@@ -46,7 +46,7 @@ export type Restaurant = {
   coords: Coords;
 };
 
-export type EstimatedRestaurantMenu = {
+export type RestaurantMenu = {
   restaurantId: string;
   items: { name: string; priceWon: string }[];
 };

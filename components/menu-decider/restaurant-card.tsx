@@ -3,17 +3,18 @@
 import { ExternalLink, Footprints, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatWalkingDistance } from "@/services/kakao-local-service";
-import type { EstimatedRestaurantMenu, Restaurant } from "@/types/menu-decider";
+import type { Restaurant, RestaurantMenu } from "@/types/menu-decider";
 
-const DISCLAIMER = "메뉴·가격은 AI 추정값입니다. 실제는 가게에서 확인해 주세요.";
+const DISCLAIMER = "메뉴·가격은 카카오맵 등록 정보 기준이며, 실제와 다를 수 있습니다.";
 
 type Props = {
   restaurant: Restaurant;
   pinNumber: number;
-  estimatedMenu?: EstimatedRestaurantMenu;
+  menu?: RestaurantMenu;
+  menuLoaded?: boolean;
 };
 
-export function RestaurantCard({ restaurant, pinNumber, estimatedMenu }: Props) {
+export function RestaurantCard({ restaurant, pinNumber, menu, menuLoaded }: Props) {
   return (
     <Card size="sm">
       <CardContent>
@@ -32,9 +33,9 @@ export function RestaurantCard({ restaurant, pinNumber, estimatedMenu }: Props) 
           {restaurant.categoryName}
         </div>
 
-        {estimatedMenu && estimatedMenu.items.length > 0 ? (
+        {menu && menu.items.length > 0 ? (
           <ul className="mb-3 space-y-0 pl-8 text-sm">
-            {estimatedMenu.items.map((item) => (
+            {menu.items.map((item) => (
               <li
                 key={item.name}
                 className="flex justify-between border-b py-1.5 last:border-b-0"
@@ -46,7 +47,9 @@ export function RestaurantCard({ restaurant, pinNumber, estimatedMenu }: Props) 
           </ul>
         ) : (
           <div className="mb-3 pl-8 text-xs italic text-muted-foreground">
-            추정 메뉴 로딩 중...
+            {menuLoaded
+              ? "카카오맵에 등록된 메뉴 정보가 없습니다."
+              : "메뉴 정보를 불러오는 중..."}
           </div>
         )}
 

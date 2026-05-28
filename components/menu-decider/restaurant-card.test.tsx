@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { EstimatedRestaurantMenu, Restaurant } from "@/types/menu-decider";
+import type { Restaurant, RestaurantMenu } from "@/types/menu-decider";
 import { RestaurantCard } from "./restaurant-card";
 
 const sample: Restaurant = {
@@ -13,33 +13,30 @@ const sample: Restaurant = {
 };
 
 describe("RestaurantCard", () => {
-  it("always renders the AI estimation disclaimer (Invariant: hallucination transparency)", () => {
+  it("always renders the data-source disclaimer (Invariant: transparency about source)", () => {
     render(<RestaurantCard restaurant={sample} pinNumber={1} />);
     expect(
-      screen.getByText(/메뉴·가격은 AI 추정값입니다.+가게에서 확인/),
+      screen.getByText(/카카오맵 등록 정보 기준이며, 실제와 다를 수 있습니다/),
     ).toBeInTheDocument();
   });
 
-  it("renders the disclaimer even when no estimated menu is provided (no close button)", () => {
+  it("renders the disclaimer even when no menu is provided (no close button)", () => {
     render(<RestaurantCard restaurant={sample} pinNumber={1} />);
-    const disclaimer = screen.getByText(/AI 추정값/);
+    const disclaimer = screen.getByText(/카카오맵 등록 정보 기준/);
     expect(disclaimer).toBeInTheDocument();
-    // disclaimer is a static node, not a button or dialog that can be dismissed
     expect(disclaimer.closest("button")).toBeNull();
     expect(disclaimer.closest('[role="dialog"]')).toBeNull();
   });
 
-  it("displays each estimated menu item with name and priceWon", () => {
-    const estimated: EstimatedRestaurantMenu = {
+  it("displays each menu item with name and priceWon", () => {
+    const menu: RestaurantMenu = {
       restaurantId: "1",
       items: [
         { name: "해물칼국수", priceWon: "9,000원" },
         { name: "들깨칼국수", priceWon: "8,500원" },
       ],
     };
-    render(
-      <RestaurantCard restaurant={sample} pinNumber={1} estimatedMenu={estimated} />,
-    );
+    render(<RestaurantCard restaurant={sample} pinNumber={1} menu={menu} />);
     expect(screen.getByText("해물칼국수")).toBeInTheDocument();
     expect(screen.getByText("9,000원")).toBeInTheDocument();
     expect(screen.getByText("들깨칼국수")).toBeInTheDocument();
