@@ -204,11 +204,11 @@
   - `components/menu-decider/restaurant-skeleton.tsx` (shimmer 스켈레톤 카드 3개)
   - `app/page.tsx` 업데이트 (메뉴 카드 도착 → search-restaurants 호출 시 스켈레톤 3개 표시 → 응답 도착 시 카드로 교체)
 - **수용 기준**:
-  - [ ] 메뉴 카드 도착 후 식당 영역에 스켈레톤(shimmer) 카드 3개가 표시된다
-  - [ ] search-restaurants 응답 도착 → 스켈레톤이 실제 식당 카드 3개로 교체된다
-  - [ ] 메뉴 카드가 식당 카드(또는 스켈레톤이 실제 카드로 교체되는 시점)보다 먼저 화면에 나타난다
-  - [ ] 각 식당 카드에 식당명, 도보 거리, 카카오맵 상세 외부 링크가 표시된다
-  - [ ] 외부 링크 `href`가 `place_url` 형태이고 `target="_blank"`로 새 탭에서 열린다
+  - [x] 메뉴 카드 도착 후 식당 영역에 스켈레톤(shimmer) 카드 3개가 표시된다
+  - [x] search-restaurants 응답 도착 → 스켈레톤이 실제 식당 카드 3개로 교체된다
+  - [x] 메뉴 카드가 식당 카드(또는 스켈레톤이 실제 카드로 교체되는 시점)보다 먼저 화면에 나타난다
+  - [x] 각 식당 카드에 식당명, 도보 거리, 카카오맵 상세 외부 링크가 표시된다
+  - [x] 외부 링크 `href`가 `place_url` 형태이고 `target="_blank"`로 새 탭에서 열린다
 - **검증**:
   - `bun run test services/kakao-local-service.test.ts app/page.test.tsx`
   - Browser MCP — 메뉴 카드 → 스켈레톤 → 식당 카드 시각 순서, 증거 `artifacts/menu-decider/evidence/task-4-order.png`

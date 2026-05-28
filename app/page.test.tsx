@@ -1,11 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Weather } from "@/types/menu-decider";
+import type { Restaurant, Weather } from "@/types/menu-decider";
 import Page from "./page";
 
 vi.mock("@/app/actions/decide-menu", () => ({
   decideMenuAction: vi.fn(),
+}));
+vi.mock("@/app/actions/search-restaurants", () => ({
+  searchRestaurantsAction: vi.fn(),
 }));
 vi.mock("@/hooks/use-geolocation", () => ({
   useGeolocation: vi.fn(),
@@ -18,17 +21,20 @@ vi.mock("@/lib/time-of-day", () => ({
 }));
 
 const { decideMenuAction } = await import("@/app/actions/decide-menu");
+const { searchRestaurantsAction } = await import("@/app/actions/search-restaurants");
 const { useGeolocation } = await import("@/hooks/use-geolocation");
 const { fetchWeather } = await import("@/lib/weather");
 const { getTimeOfDay } = await import("@/lib/time-of-day");
 
 const mockedDecide = vi.mocked(decideMenuAction);
+const mockedSearch = vi.mocked(searchRestaurantsAction);
 const mockedGeo = vi.mocked(useGeolocation);
 const mockedWeather = vi.mocked(fetchWeather);
 const mockedTimeOfDay = vi.mocked(getTimeOfDay);
 
 beforeEach(() => {
   mockedDecide.mockReset();
+  mockedSearch.mockReset();
   mockedGeo.mockReset();
   mockedWeather.mockReset();
   mockedTimeOfDay.mockReset();
@@ -39,7 +45,35 @@ beforeEach(() => {
   });
   mockedWeather.mockResolvedValue({ condition: "흐림", tempC: 18 });
   mockedTimeOfDay.mockReturnValue("점심");
+  mockedSearch.mockResolvedValue([]);
 });
+
+const sampleRestaurants: Restaurant[] = [
+  {
+    id: "1",
+    name: "김씨네 칼국수",
+    categoryName: "한식 · 칼국수",
+    distanceMeters: 400,
+    kakaoUrl: "https://place.map.kakao.com/1",
+    coords: { lat: 37.5, lng: 127 },
+  },
+  {
+    id: "2",
+    name: "손칼국수 명가",
+    categoryName: "한식 · 칼국수",
+    distanceMeters: 640,
+    kakaoUrl: "https://place.map.kakao.com/2",
+    coords: { lat: 37.5, lng: 127 },
+  },
+  {
+    id: "3",
+    name: "일미옥",
+    categoryName: "한식 · 분식",
+    distanceMeters: 950,
+    kakaoUrl: "https://place.map.kakao.com/3",
+    coords: { lat: 37.5, lng: 127 },
+  },
+];
 
 async function waitForWeatherReady() {
   await waitFor(() => expect(screen.getByText(/흐림 18°C/)).toBeInTheDocument());
@@ -201,5 +235,71 @@ describe("Page — Task 3 (LLM 실패 처리)", () => {
     expect(mockedDecide).toHaveBeenCalledTimes(2);
     expect(mockedDecide.mock.calls[0]?.[0].prompt).toBe("해장");
     expect(mockedDecide.mock.calls[1]?.[0].prompt).toBe("해장");
+  });
+});
+
+describe("Page — Task 4 (식당 검색 + 스켈레톤)", () => {
+  it("shows restaurant skeletons after the menu card while restaurants are loading", async () => {
+    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "비 오는 점심엔 칼국수" });
+    let resolveSearch: (rs: Restaurant[]) => void = () => {};
+    mockedSearch.mockReturnValue(
+      new Promise<Restaurant[]>((r) => {
+        resolveSearch = r;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("칼국수"));
+
+    expect(screen.getByTestId("restaurant-skeleton-list")).toBeInTheDocument();
+    expect(screen.queryByText("김씨네 칼국수")).not.toBeInTheDocument();
+
+    resolveSearch(sampleRestaurants);
+
+    await waitFor(() => screen.getByText("김씨네 칼국수"));
+    expect(screen.queryByTestId("restaurant-skeleton-list")).not.toBeInTheDocument();
+  });
+
+  it("menu card appears before restaurant cards (Invariant: result order)", async () => {
+    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    let resolveSearch: (rs: Restaurant[]) => void = () => {};
+    mockedSearch.mockReturnValue(
+      new Promise<Restaurant[]>((r) => {
+        resolveSearch = r;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("칼국수"));
+    expect(screen.queryByText("김씨네 칼국수")).not.toBeInTheDocument();
+
+    resolveSearch(sampleRestaurants);
+    await waitFor(() => screen.getByText("김씨네 칼국수"));
+  });
+
+  it("each restaurant card has name, walking distance, and a kakao link (target=_blank)", async () => {
+    mockedDecide.mockResolvedValue({ menu: "칼국수", reason: "이유" });
+    mockedSearch.mockResolvedValue(sampleRestaurants);
+    const user = userEvent.setup();
+    render(<Page />);
+    await waitForWeatherReady();
+
+    await user.click(screen.getByRole("button", { name: /추천받기/ }));
+    await waitFor(() => screen.getByText("김씨네 칼국수"));
+
+    expect(screen.getByText("도보 5분")).toBeInTheDocument();
+    expect(screen.getByText("도보 8분")).toBeInTheDocument();
+    expect(screen.getByText("도보 12분")).toBeInTheDocument();
+
+    const links = screen.getAllByRole("link", { name: /카카오맵에서 보기/ });
+    expect(links).toHaveLength(3);
+    expect(links[0]).toHaveAttribute("target", "_blank");
+    expect(links[0]).toHaveAttribute("href", "https://place.map.kakao.com/1");
   });
 });
