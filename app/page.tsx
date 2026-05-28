@@ -1,35 +1,52 @@
 "use client";
 
-import { Clock, CloudRain, MapPin, Sparkles } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Sparkles } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import { decideMenuAction } from "@/app/actions/decide-menu";
+import { ContextDisplay } from "@/components/menu-decider/context-display";
 import { MenuCard } from "@/components/menu-decider/menu-card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { MenuRecommendation, RecommendationContext } from "@/types/menu-decider";
-
-// Task 2에서 hook으로 교체됩니다.
-const MOCK_CONTEXT_BASE = {
-  coords: { lat: 37.4979, lng: 127.0276 },
-  regionLabel: "서울 강남구",
-  weather: { condition: "흐림", tempC: 18 },
-  timeOfDay: "점심",
-} as const;
+import { useGeolocation } from "@/hooks/use-geolocation";
+import { getTimeOfDay } from "@/lib/time-of-day";
+import { fetchWeather } from "@/lib/weather";
+import type { MenuRecommendation, RecommendationContext, Weather } from "@/types/menu-decider";
 
 export default function Page() {
   const [prompt, setPrompt] = useState("");
   const [recommendation, setRecommendation] = useState<MenuRecommendation | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const geo = useGeolocation();
+  const [weather, setWeather] = useState<Weather | undefined>(undefined);
+  const timeOfDay = getTimeOfDay();
+
+  useEffect(() => {
+    if (geo.status !== "granted") return;
+    let cancelled = false;
+    fetchWeather(geo.coords)
+      .then((w) => {
+        if (!cancelled) setWeather(w);
+      })
+      .catch(() => {
+        // Task 3에서 통일 에러 처리. 여기서는 weather 미설정 상태로 둠
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [geo]);
+
+  const canSubmit = geo.status === "granted" && weather !== undefined && !isPending;
+
   const requestRecommendation = () => {
+    if (geo.status !== "granted" || !weather) return;
     startTransition(async () => {
       const context: RecommendationContext = {
-        coords: MOCK_CONTEXT_BASE.coords,
-        regionLabel: MOCK_CONTEXT_BASE.regionLabel,
-        weather: MOCK_CONTEXT_BASE.weather,
-        timeOfDay: MOCK_CONTEXT_BASE.timeOfDay,
+        coords: geo.coords,
+        regionLabel: "현재 위치",
+        weather,
+        timeOfDay,
         prompt: prompt.trim() ? prompt.trim() : undefined,
         excludedMenus: [],
       };
@@ -58,29 +75,12 @@ export default function Page() {
             </p>
           </div>
 
-          <Card size="sm" className="mb-4">
-            <CardContent>
-              <div className="mb-2 text-xs text-muted-foreground">자동 수집된 맥락</div>
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <div className="flex items-center gap-1">
-                  <MapPin className="size-4" />
-                  <span>{MOCK_CONTEXT_BASE.regionLabel}</span>
-                </div>
-                <span className="text-muted-foreground">·</span>
-                <div className="flex items-center gap-1">
-                  <CloudRain className="size-4" />
-                  <span>
-                    {MOCK_CONTEXT_BASE.weather.condition} {MOCK_CONTEXT_BASE.weather.tempC}°C
-                  </span>
-                </div>
-                <span className="text-muted-foreground">·</span>
-                <div className="flex items-center gap-1">
-                  <Clock className="size-4" />
-                  <span>{MOCK_CONTEXT_BASE.timeOfDay}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ContextDisplay
+            regionLabel={geo.status === "granted" ? "현재 위치" : undefined}
+            weather={weather}
+            timeOfDay={timeOfDay}
+            locationStatus={geo.status}
+          />
 
           <div className="mb-6">
             <Label htmlFor="prompt" className="mb-2 text-xs text-muted-foreground">
@@ -97,12 +97,18 @@ export default function Page() {
 
           <Button
             onClick={requestRecommendation}
-            disabled={isPending}
+            disabled={!canSubmit}
             className="w-full py-6 text-base font-bold"
           >
             <Sparkles className="size-4" />
             {isPending ? "추천하는 중..." : "추천받기"}
           </Button>
+
+          {(geo.status === "denied" || geo.status === "unsupported") && (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              위치 정보를 사용할 수 없습니다 (수동 지역 입력은 Task 7에서 추가됩니다)
+            </p>
+          )}
         </>
       )}
     </main>
